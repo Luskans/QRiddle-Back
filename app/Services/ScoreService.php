@@ -66,35 +66,4 @@ class ScoreService implements ScoreServiceInterface
             'all'   => $this->getUserRankByPeriod('all', $userId),
         ];
     }
-
-    // public function getPlayerRankByPeriodAndName(string $period, string $playerName)
-    // {
-    //     $playerData = DB::table('global_scores')
-    //         ->join('users', 'global_scores.user_id', '=', 'users.id')
-    //         ->select('users.username', 'users.image', 'global_scores.score')
-    //         ->where('global_scores.period', '=', $period)
-    //         ->where('users.username', $playerName)
-    //         ->first();
-
-    //     if (is_null($playerData)) {
-    //         return null;
-    //     }
-
-    //     $playerRank = DB::table('global_scores')
-    //         ->where('period', $period)
-    //         ->where('score', '>', $playerData->score)
-    //         ->count() + 1;
-        
-    //     return [
-    //         'username' => $playerData->username,
-    //         'image' => $playerData->image,
-    //         'score' => $playerData->score,
-    //         'rank' => $playerRank,
-    //     ];
-    // }
-
-    // public function getPlayersAutocomplete(string $searchName, string $playerName)
-    // {
-        
-    // }
 }
