@@ -12,7 +12,6 @@ use App\Models\SessionStep;
 use App\Models\Step;
 use App\Models\User;
 use Carbon\Carbon;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -145,23 +144,23 @@ class DatabaseSeeder extends Seeder
         // JEAN with no riddles testing sylvain's riddles
         $jean = User::factory()->create([
             'name' => 'Jean',
-            'email'    => 'jean@email.com',
-            'password' => Hash::make('jean'),
+            'email'    => 'b@b',
+            'password' => Hash::make('b'),
         ]);
 
         // PIERRE with no score
         $pierre = User::factory()->create([
             'name' => 'Pierre',
-            'email'    => 'pierre@email.com',
-            'password' => Hash::make('pierre'),
+            'email'    => 'c@c',
+            'password' => Hash::make('c'),
             'email_verified_at' => null
         ]);
 
         // PAUL with unverified email
         $paul = User::factory()->create([
             'name' => 'Paul',
-            'email'    => 'paul@email.com',
-            'password' => Hash::make('paul'),
+            'email'    => 'd@d',
+            'password' => Hash::make('d'),
         ]);
         
         // Other random users
