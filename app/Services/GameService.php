@@ -21,10 +21,35 @@ class GameService implements GameServiceInterface
 
     public function getActiveSession(int $userId): ?GameSession
     {
+        // return GameSession::with([
+        //         'riddle:id,title',
+        //         'sessionSteps:id' => function ($query) {
+        //             $query->where('status', 'active')->with('step:id,order_number')->latest('start_time')->limit(1);
+        //         }
+        //     ])
+        //     ->where('player_id', $userId)
+        //     ->where('status', 'active')
+        //     ->latest('updated_at')
+        //     ->first();
+
         return GameSession::with([
-                'riddle:id,title',
-                'sessionSteps' => function ($query) {
-                    $query->where('status', 'active')->with('step:id,order_number')->latest('start_time')->limit(1);
+                'riddle' => function ($query) {
+                    $query->select('id', 'title', 'latitude', 'longitude')
+                        ->withCount('steps');
+                },
+                // 'sessionSteps' => function ($query) {
+                //     $query->select('id', 'hint_used_number', 'status', 'start_time')
+                //         ->where('status', 'active')
+                //         ->with(['step' => function ($query) {
+                //             $query->select('id', 'order_number');
+                //         }])
+                //         ->latest('start_time')
+                //         ->limit(1);
+                // }
+                'latestActiveSessionStep' => function ($query) {
+                    $query->with(['step' => function ($query) {
+                        $query->select('id', 'order_number');
+                    }]);
                 }
             ])
             ->where('player_id', $userId)

@@ -3,7 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\DashboardController; // Renommé depuis HomeController
+use App\Http\Controllers\HomeController; // Renommé depuis HomeController
 use App\Http\Controllers\GameSessionController;
 use App\Http\Controllers\HintController;
 use App\Http\Controllers\LeaderboardController;
@@ -32,8 +32,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Peut-être ajouter PUT /user pour la mise à jour du profil (UserController@updateProfile)
 
     // == Dashboard (Ancien Home) ==
-    Route::get('/dashboard', [DashboardController::class, 'index'])
-         ->name('dashboard.index'); // Nommer la route est une bonne pratique
+    Route::get('/home', [HomeController::class, 'index'])
+         ->name('home.index'); // Nommer la route est une bonne pratique
 
     // == Ressources Utilisateur ('Mes ...') ==
     Route::prefix('users/me')->name('users.me.')->group(function () {

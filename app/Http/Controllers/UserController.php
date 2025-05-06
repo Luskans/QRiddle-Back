@@ -21,27 +21,20 @@ class UserController extends Controller
     {
         $userId = Auth::id();
         if (!$userId) {
-            return response()->json(['message' => 'Unauthenticated.'], Response::HTTP_UNAUTHORIZED);
+            return response()->json(['message' => 'Utilisateur non authentifié.'], Response::HTTP_UNAUTHORIZED);
         }
 
-        // Validation des paramètres de pagination (optionnel mais recommandé)
         $validated = $request->validate([
             'limit' => 'sometimes|integer|min:1|max:100',
             'offset' => 'sometimes|integer|min:0',
-            'status' => 'sometimes|string|in:draft,active,disabled', // Optionnel: filtrer par statut
         ]);
 
-        $limit = $validated['limit'] ?? 15; // Limite par défaut
-        $offset = $validated['offset'] ?? 0; // Offset par défaut
+        $limit = $validated['limit'] ?? 20;
+        $offset = $validated['offset'] ?? 0;
 
-        // Requête pour les énigmes créées par l'utilisateur
         $query = Riddle::where('creator_id', $userId)
-                       ->orderBy('created_at', 'desc'); // Trier par date de création (ou autre)
+                       ->orderBy('updated_at', 'desc');
 
-        // Appliquer le filtre de statut si fourni
-        if (isset($validated['status'])) {
-            $query->where('status', $validated['status']);
-        }
 
         // Cloner pour compter le total avant pagination
         $totalQuery = clone $query;
@@ -50,9 +43,7 @@ class UserController extends Controller
         // Appliquer la pagination
         $riddles = $query->skip($offset)
                          ->take($limit)
-                         // Sélectionner les colonnes nécessaires pour la liste
-                         ->get(['id', 'title', 'status', 'is_private', 'created_at', /* 'latitude', 'longitude' ? */]);
-                         // Ajouter d'autres champs si besoin pour l'affichage liste (ex: image miniature ?)
+                         ->get(['id', 'title', 'status', 'is_private', 'updated_at', 'latitude', 'longitude']);
 
         return response()->json([
             'riddles' => $riddles,
@@ -67,7 +58,6 @@ class UserController extends Controller
 
     /**
      * Récupère la liste paginée des sessions de jeu de l'utilisateur authentifié.
-     * Permet de filtrer par statut (ex: 'completed', 'active', 'abandoned').
      *
      * @param Request $request
      * @return JsonResponse
@@ -76,34 +66,22 @@ class UserController extends Controller
     {
         $userId = Auth::id();
         if (!$userId) {
-            return response()->json(['message' => 'Unauthenticated.'], Response::HTTP_UNAUTHORIZED);
+            return response()->json(['message' => 'Utilisateur non authentifié.'], Response::HTTP_UNAUTHORIZED);
         }
 
-        // Validation des paramètres
         $validated = $request->validate([
             'limit' => 'sometimes|integer|min:1|max:100',
             'offset' => 'sometimes|integer|min:0',
-            'status' => 'sometimes|string|in:active,completed,abandoned', // Statuts possibles de GameSession
-            'with' => 'sometimes|string', // Pour charger des relations (ex: 'riddle')
         ]);
 
-        $limit = $validated['limit'] ?? 15;
+        $limit = $validated['limit'] ?? 20;
         $offset = $validated['offset'] ?? 0;
 
-        // Requête pour les sessions de jeu de l'utilisateur
         $query = GameSession::where('player_id', $userId)
-                            ->orderBy('updated_at', 'desc'); // Trier par la plus récente mise à jour
+                            ->where('status', '!=', 'active')
+                            ->orderBy('created_at', 'desc')
+                            ->with('riddle:id,title,latitude,longitude');
 
-        // Appliquer le filtre de statut si fourni
-        if (isset($validated['status'])) {
-            $query->where('status', $validated['status']);
-        }
-
-        // Charger les relations demandées (ex: 'riddle')
-        if (isset($validated['with']) && $validated['with'] === 'riddle') {
-            // Charger seulement les colonnes nécessaires du riddle
-            $query->with('riddle:id,title'); // Adaptez les colonnes selon vos besoins
-        }
 
         // Cloner pour compter le total
         $totalQuery = clone $query;
@@ -112,11 +90,10 @@ class UserController extends Controller
         // Appliquer la pagination
         $gameSessions = $query->skip($offset)
                               ->take($limit)
-                              // Sélectionner les colonnes de GameSession nécessaires
                               ->get(['id', 'riddle_id', 'status', 'score', 'created_at', 'updated_at']);
 
         return response()->json([
-            'sessions' => $gameSessions, // Renommé en 'sessions' pour clarté
+            'sessions' => $gameSessions,
             'meta' => [
                 'offset' => $offset,
                 'limit' => $limit,

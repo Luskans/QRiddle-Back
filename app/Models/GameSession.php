@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class GameSession extends Model
 {
@@ -29,6 +30,13 @@ class GameSession extends Model
     public function sessionSteps()
     {
         return $this->hasMany(SessionStep::class);
+    }
+
+    public function latestActiveSessionStep(): HasOne
+    {
+        return $this->hasOne(SessionStep::class)
+                    ->where('status', 'active')
+                    ->latest('start_time');
     }
 
     public function getTotalDuration()
