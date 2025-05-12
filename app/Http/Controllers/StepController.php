@@ -30,9 +30,9 @@ class StepController extends Controller
         // Ou tout le monde peut voir la liste (mais pas forcément les détails comme le QR code exact) ?
         // Pour l'instant, supposons que tout utilisateur authentifié peut voir la liste.
         // Si seul le créateur peut voir :
-        // if (Auth::id() !== $riddle->creator_id) {
-        //     return response()->json(['message' => 'Unauthorized.'], Response::HTTP_FORBIDDEN);
-        // }
+        if (Auth::id() !== $riddle->creator_id) {
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
+        }
 
         // Récupérer les étapes triées par order_number
         // Charger les relations si nécessaire (ex: nombre d'indices)
@@ -42,26 +42,26 @@ class StepController extends Controller
                        ->get(); // Récupérer toutes les étapes
 
         // Optionnel: Générer l'URL de l'image QR pour chaque étape si pas déjà fait
-        foreach ($steps as $step) {
-            if ($step->qr_code) { // S'assurer qu'il y a une valeur QR
-                $fileName = 'step_qr_' . $step->id . '.png'; // Nom de fichier prévisible
-                $filePath = 'qrcodes/' . $fileName;
-                if (Storage::disk('public')->exists($filePath)) {
-                    $step->qr_code_image_url = Storage::url($filePath);
-                } else {
-                    // Tenter de générer si manquant (peut ralentir la requête index)
-                    try {
-                        Storage::disk('public')->put($filePath, QrCode::format('png')->size(300)->generate($step->qr_code));
-                        $step->qr_code_image_url = Storage::url($filePath);
-                    } catch (\Exception $e) {
-                        Log::error("Failed to generate/save QR code image for step {$step->id} during index: " . $e->getMessage());
-                        $step->qr_code_image_url = null;
-                    }
-                }
-            } else {
-                 $step->qr_code_image_url = null;
-            }
-        }
+        // foreach ($steps as $step) {
+        //     if ($step->qr_code) { // S'assurer qu'il y a une valeur QR
+        //         $fileName = 'step_qr_' . $step->id . '.png'; // Nom de fichier prévisible
+        //         $filePath = 'qrcodes/' . $fileName;
+        //         if (Storage::disk('public')->exists($filePath)) {
+        //             $step->qr_code_image_url = Storage::url($filePath);
+        //         } else {
+        //             // Tenter de générer si manquant (peut ralentir la requête index)
+        //             try {
+        //                 Storage::disk('public')->put($filePath, QrCode::format('png')->size(300)->generate($step->qr_code));
+        //                 $step->qr_code_image_url = Storage::url($filePath);
+        //             } catch (\Exception $e) {
+        //                 Log::error("Failed to generate/save QR code image for step {$step->id} during index: " . $e->getMessage());
+        //                 $step->qr_code_image_url = null;
+        //             }
+        //         }
+        //     } else {
+        //          $step->qr_code_image_url = null;
+        //     }
+        // }
 
 
         return response()->json(['steps' => $steps], Response::HTTP_OK);

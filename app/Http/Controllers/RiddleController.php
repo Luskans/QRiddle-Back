@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\RiddleDetailResource;
 use App\Models\Riddle;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -115,9 +116,16 @@ class RiddleController extends Controller
                 'longitude' => $validatedData['longitude'],
             ]);
 
+            $riddle->loadCount('steps');
+            $riddle->loadAvg('reviews', 'rating');
+            $riddle->loadAvg('reviews', 'difficulty');
+
             // Retourner l'énigme créée (avec son ID)
             // Le mot de passe hashé ne sera pas retourné grâce à $hidden dans le modèle
-            return response()->json($riddle, Response::HTTP_CREATED);
+            // return response()->json($riddle, Response::HTTP_CREATED);
+            return (new RiddleDetailResource($riddle))
+                ->response()
+                ->setStatusCode(Response::HTTP_CREATED);
 
         } catch (\Exception $e) {
             Log::error('Error creating riddle: ' . $e->getMessage());
@@ -134,21 +142,36 @@ class RiddleController extends Controller
      */
     public function show(Riddle $riddle): JsonResponse
     {
-        // Vérifier si l'énigme est privée et si l'utilisateur n'est pas le créateur
-        if ($riddle->is_private && Auth::id() !== $riddle->creator_id) {
-            // Ici, tu pourrais avoir une logique pour vérifier si l'utilisateur
-            // a déjà joué ou a le droit de voir (ex: via un mot de passe fourni ?)
-            // Pour l'instant, on interdit l'accès direct aux détails si privé et non créateur.
-            // Le frontend devra gérer la demande de mot de passe avant de démarrer la partie.
-            return response()->json(['message' => 'This riddle is private.'], Response::HTTP_FORBIDDEN);
-        }
+        // // Vérifier si l'énigme est privée et si l'utilisateur n'est pas le créateur
+        // if ($riddle->is_private && Auth::id() !== $riddle->creator_id) {
+        //     // Ici, tu pourrais avoir une logique pour vérifier si l'utilisateur
+        //     // a déjà joué ou a le droit de voir (ex: via un mot de passe fourni ?)
+        //     // Pour l'instant, on interdit l'accès direct aux détails si privé et non créateur.
+        //     // Le frontend devra gérer la demande de mot de passe avant de démarrer la partie.
+        //     return response()->json(['message' => 'This riddle is private.'], Response::HTTP_FORBIDDEN);
+        // }
 
-        // Charger des relations si nécessaire pour le détail
-        // $riddle->load(['creator:id,name', 'steps:id,order_number']); // Exemple
+        // // Charger des relations si nécessaire pour le détail
+        // // $riddle->load(['creator:id,name', 'steps:id,order_number']); // Exemple
 
-        // Retourner les détails
-        // Le mot de passe n'est pas inclus grâce à $hidden dans le modèle Riddle
-        return response()->json($riddle, Response::HTTP_OK);
+        // // Retourner les détails
+        // // Le mot de passe n'est pas inclus grâce à $hidden dans le modèle Riddle
+        // return response()->json($riddle, Response::HTTP_OK);
+
+
+
+
+        // Charger les agrégations nécessaires sur le modèle
+        // avant de le passer à la Resource.
+        $riddle->loadCount('steps'); // Ajoute 'steps_count'
+        $riddle->loadCount('reviews'); // Ajoute 'reviews_count'
+        $riddle->loadAvg('reviews', 'rating'); // Ajoute 'reviews_avg_rating'
+        $riddle->loadAvg('reviews', 'difficulty'); // Ajoute 'reviews_avg_difficulty'
+
+        // La logique de visibilité du mot de passe est maintenant dans la Resource
+        return (new RiddleDetailResource($riddle))
+                ->response()
+                ->setStatusCode(Response::HTTP_OK);
     }
 
     /**
@@ -162,7 +185,7 @@ class RiddleController extends Controller
     {
         // 1. Autorisation : Seul le créateur peut modifier
         if (Auth::id() !== $riddle->creator_id) {
-            return response()->json(['message' => 'Unauthorized.'], Response::HTTP_FORBIDDEN);
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
         // 2. Validation (similaire à store, mais champs non requis)
@@ -214,8 +237,16 @@ class RiddleController extends Controller
             // Mettre à jour l'énigme
             $riddle->update($updateData);
 
+            $riddle->loadCount('steps');
+            $riddle->loadCount('reviews');
+            $riddle->loadAvg('reviews', 'rating');
+            $riddle->loadAvg('reviews', 'difficulty');
+
             // Retourner l'énigme mise à jour
-            return response()->json($riddle, Response::HTTP_OK);
+            // return response()->json($riddle, Response::HTTP_OK);
+            return (new RiddleDetailResource($riddle))
+                ->response()
+                ->setStatusCode(Response::HTTP_OK);
 
         } catch (\Exception $e) {
             Log::error('Error updating riddle ' . $riddle->id . ': ' . $e->getMessage());
