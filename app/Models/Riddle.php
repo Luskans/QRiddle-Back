@@ -21,16 +21,16 @@ class Riddle extends Model
         'longitude'
     ];
 
-    protected $hidden = [
-        'password',
-    ];
+    // protected $hidden = [
+    //     'password',
+    // ];
 
-    protected function casts(): array
-    {
-        return [
-            'password' => 'hashed',
-        ];
-    }
+    // protected function casts(): array
+    // {
+    //     return [
+    //         'password' => 'hashed',
+    //     ];
+    // }
 
     public function creator()
     {
@@ -50,5 +50,10 @@ class Riddle extends Model
     public function reviews()
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function stepsCount()
+    {
+        return $this->withCount('steps');
     }
 }

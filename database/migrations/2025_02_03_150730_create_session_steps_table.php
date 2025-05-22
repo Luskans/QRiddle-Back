@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('game_session_id')->constrained()->onDelete('cascade');
             $table->foreignId('step_id')->constrained()->onDelete('cascade');
-            $table->integer('hint_used_number')->default(0);
+            $table->integer('extra_hints')->default(0);
             $table->enum('status', ['active', 'completed', 'abandoned'])->default('active');
             $table->timestamp('start_time');
             $table->timestamp('end_time')->nullable();

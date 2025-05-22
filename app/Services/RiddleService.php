@@ -13,6 +13,7 @@ class RiddleService implements RiddleServiceInterface
     {
         return DB::table('riddles')
             ->where('creator_id', $userId)
+            ->whereNull('deleted_at')
             ->count();
     }
 }

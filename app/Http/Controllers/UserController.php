@@ -29,11 +29,13 @@ class UserController extends Controller
             'offset' => 'sometimes|integer|min:0',
         ]);
 
-        $limit = $validated['limit'] ?? 20;
+        $limit = $validated['limit'] ?? null;
         $offset = $validated['offset'] ?? 0;
 
-        $query = Riddle::where('creator_id', $userId)
-                       ->orderBy('updated_at', 'desc');
+        $query = Riddle::query()
+                        ->select(['id', 'title', 'status', 'is_private', 'updated_at', 'latitude', 'longitude'])
+                        ->where('creator_id', $userId)
+                        ->orderBy('updated_at', 'desc');
 
 
         // Cloner pour compter le total avant pagination
@@ -43,7 +45,7 @@ class UserController extends Controller
         // Appliquer la pagination
         $riddles = $query->skip($offset)
                          ->take($limit)
-                         ->get(['id', 'title', 'status', 'is_private', 'updated_at', 'latitude', 'longitude']);
+                         ->get();
 
         return response()->json([
             'riddles' => $riddles,
@@ -53,6 +55,47 @@ class UserController extends Controller
                 'total' => $totalCount,
                 'hasMore' => ($offset + count($riddles)) < $totalCount,
             ]
+        ], Response::HTTP_OK);
+    }
+
+    public function myCreatedRiddles2(Request $request): JsonResponse
+    {
+        $userId = Auth::id();
+        if (!$userId) {
+            return response()->json(['message' => 'Utilisateur non authentifié.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $validated = $request->validate([
+            'page' => 'sometimes|integer|min:1',  // Changé de offset à page
+            'limit' => 'sometimes|integer|min:1|max:100',
+        ]);
+
+        $page = $validated['page'] ?? 1;  // Page par défaut = 1
+        $limit = $validated['limit'] ?? 10;  // Limite par défaut = 10
+        $offset = ($page - 1) * $limit;  // Calcul de l'offset à partir de la page
+
+        $query = Riddle::query()
+                        ->select(['id', 'title', 'status', 'is_private', 'updated_at', 'latitude', 'longitude'])
+                        ->where('creator_id', $userId)
+                        ->orderBy('updated_at', 'desc');
+
+        // Cloner pour compter le total avant pagination
+        $totalQuery = clone $query;
+        $totalCount = $totalQuery->count();
+        $totalPages = ceil($totalCount / $limit);
+
+        // Appliquer la pagination
+        $riddles = $query->skip($offset)
+                        ->take($limit)
+                        ->get();
+
+        return response()->json([
+            'items' => $riddles,  // Renommé riddles en items pour plus de clarté
+            'page' => $page,
+            'limit' => $limit,
+            'totalItems' => $totalCount,
+            'totalPages' => $totalPages,
+            'hasMore' => $page < $totalPages,
         ], Response::HTTP_OK);
     }
 
@@ -77,7 +120,8 @@ class UserController extends Controller
         $limit = $validated['limit'] ?? 20;
         $offset = $validated['offset'] ?? 0;
 
-        $query = GameSession::where('player_id', $userId)
+        $query = GameSession::select('id', 'status', 'riddle_id', 'created_at')
+                            ->where('player_id', $userId)
                             ->where('status', '!=', 'active')
                             ->orderBy('created_at', 'desc')
                             ->with('riddle:id,title,latitude,longitude');

@@ -15,29 +15,36 @@ class RiddleDetailResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $isCreator = Auth::check() && Auth::id() === $this->creator_id;
+
         return [
             'id' => $this->id,
             'title' => $this->title,
             'description' => $this->description,
-            'is_private' => (bool) $this->is_private, // Assurer que c'est un booléen
+            'is_private' => (bool) $this->is_private,
             'status' => $this->status,
             'latitude' => $this->latitude,
             'longitude' => $this->longitude,
-            'creator_id' => $this->creator_id,
-            'updated_at' => $this->updated_at->toIso8601String(), // Format ISO standard
-
-            // Champs agrégés (doivent être chargés sur le modèle avant)
-            'stepsCount' => $this->steps_count, // Sera disponible si chargé avec withCount('steps')
-            'reviewsCount' => $this->reviews_count, // Sera disponible si chargé avec withCount('reviews')
-            'averageRating' => round($this->reviews_avg_rating, 1) ?? null, // Sera disponible si chargé avec withAvg('reviews', 'rating')
-            'averageDifficulty' => round($this->reviews_avg_difficulty, 1) ?? null, // Sera disponible si chargé avec withAvg('reviews', 'difficulty')
-
-            // Mot de passe conditionnel
-            // 'when' s'assure que la clé 'password' n'est ajoutée que si la condition est vraie
-            'password' => $this->when(
-                Auth::check() && Auth::id() === $this->creator_id && $this->is_private,
-                $this->password // Renvoie la valeur du mot de passe
-            ),
+            'updated_at' => $this->updated_at->toIso8601String(),
+            // 'stepsCount' => $this->steps_count,
+            // 'reviewsCount' => $this->reviews_count,
+            'averageRating' => $this->reviews_avg_rating ? round($this->reviews_avg_rating, 1) : null,
+            'averageDifficulty' => $this->reviews_avg_difficulty ? round($this->reviews_avg_difficulty, 1) : null,
+            'password' => $this->when($isCreator, $this->password),
+            'creator' => [
+                'id' => $this->creator->id,
+                'name' => $this->creator->name,
+                'image' => $this->creator->image,
+            ],
+            'steps' => $this->when($isCreator, function() {
+                return $this->steps->map(function($step) {
+                    return [
+                        'id' => $step->id,
+                        'order_number' => $step->order_number,
+                        'qr_code' => $step->qr_code,
+                    ];
+                });
+            }),
         ];
     }
 }

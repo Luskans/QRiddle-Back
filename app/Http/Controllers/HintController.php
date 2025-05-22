@@ -140,14 +140,21 @@ class HintController extends Controller
     {
         // 1. Autorisation : Vérifier si l'utilisateur est le créateur
         if (Auth::id() !== $hint->step->riddle->creator_id) {
-            return response()->json(['message' => 'Unauthorized.'], Response::HTTP_FORBIDDEN);
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
         // 2. Supprimer l'indice
         try {
+            $orderDeleted = $hint->order_number;
+            $stepId = $hint->step_id;
+
             $hint->delete();
 
             // 3. Retourner une réponse vide avec succès
+            Hint::where('step_id', $stepId)
+                ->where('order_number', '>', $orderDeleted)
+                ->decrement('order_number');
+
             return response()->json(null, Response::HTTP_NO_CONTENT); // 204 No Content
 
         } catch (\Exception $e) {

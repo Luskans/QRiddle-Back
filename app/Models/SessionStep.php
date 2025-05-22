@@ -12,7 +12,7 @@ class SessionStep extends Model
     protected $fillable = [
         'game_session_id',
         'step_id',
-        'hint_used_number', 
+        'extra_hints', 
         'status',
         'start_time',
         'end_time'

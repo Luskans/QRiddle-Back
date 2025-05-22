@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Riddle>
@@ -28,10 +29,10 @@ class RiddleFactory extends Factory
             'title'         => fake()->sentence(6, true),
             'description'   => fake()->paragraph,
             'is_private'    => fake()->boolean,
-            'password'      => static::$password ??= Hash::make('password'),
+            'password'      => Str::random(8),
             'status'        => fake()->randomElement(['draft', 'active', 'disabled']),
-            'latitude'     => fake()->latitude,
-            'longitude'    => fake()->longitude,
+            'latitude'      => fake()->latitude,
+            'longitude'     => fake()->longitude,
         ];
     }
 }

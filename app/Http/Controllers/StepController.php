@@ -37,9 +37,10 @@ class StepController extends Controller
         // Récupérer les étapes triées par order_number
         // Charger les relations si nécessaire (ex: nombre d'indices)
         $steps = $riddle->steps()
-                       ->orderBy('order_number', 'asc')
-                       // ->withCount('hints') // Optionnel: compter les indices
-                       ->get(); // Récupérer toutes les étapes
+                        ->select('id', 'order_number')
+                        ->orderBy('order_number', 'asc')
+                        // ->withCount('hints') // Optionnel: compter les indices
+                        ->get(); // Récupérer toutes les étapes
 
         // Optionnel: Générer l'URL de l'image QR pour chaque étape si pas déjà fait
         // foreach ($steps as $step) {
@@ -80,7 +81,7 @@ class StepController extends Controller
     {
         // 1. Autorisation
         if (Auth::id() !== $riddle->creator_id) {
-            return response()->json(['message' => 'Unauthorized.'], Response::HTTP_FORBIDDEN);
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
         // 2. Validation (seulement lat/lon)
@@ -104,18 +105,6 @@ class StepController extends Controller
                 'qr_code' => $qrCodeValue,
             ]);
 
-            // 6. Générer l'image QR Code pour affichage
-            $fileName = 'step_qr_' . $step->id . '.png'; // Utiliser un nom prévisible
-            $filePath = 'qrcodes/' . $fileName;
-            try {
-                Storage::disk('public')->put($filePath, QrCode::format('png')->size(300)->generate($qrCodeValue));
-                $step->qr_code_image_url = Storage::url($filePath);
-            } catch (\Exception $e) {
-                Log::error("Failed to generate/save QR code image for step {$step->id}: " . $e->getMessage());
-                $step->qr_code_image_url = null;
-            }
-
-            // 7. Retourner la réponse
             return response()->json($step, Response::HTTP_CREATED);
 
         } catch (\Exception $e) {
@@ -138,32 +127,11 @@ class StepController extends Controller
         // Pour l'instant, supposons que seul le créateur peut voir les détails complets via cette route.
         $riddle = $step->riddle; // Récupère l'énigme parente
         if (Auth::id() !== $riddle->creator_id) {
-            return response()->json(['message' => 'Unauthorized.'], Response::HTTP_FORBIDDEN);
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
         // Charger les relations si nécessaire (ex: indices)
-        $step->load('hints'); // Charge les indices associés à cette étape
-
-        // Générer l'URL de l'image QR si nécessaire
-        if ($step->qr_code) {
-            $fileName = 'step_qr_' . $step->id . '.png';
-            $filePath = 'qrcodes/' . $fileName;
-            if (Storage::disk('public')->exists($filePath)) {
-                $step->qr_code_image_url = Storage::url($filePath);
-            } else {
-                 // Tenter de générer si manquant
-                 try {
-                    Storage::disk('public')->put($filePath, QrCode::format('png')->size(300)->generate($step->qr_code));
-                    $step->qr_code_image_url = Storage::url($filePath);
-                 } catch (\Exception $e) {
-                    Log::error("Failed to generate/save QR code image for step {$step->id} during show: " . $e->getMessage());
-                    $step->qr_code_image_url = null;
-                 }
-            }
-        } else {
-            $step->qr_code_image_url = null;
-        }
-
+        // $step->load('hints'); // Charge les indices associés à cette étape
 
         return response()->json($step, Response::HTTP_OK);
     }
@@ -181,7 +149,7 @@ class StepController extends Controller
         // 1. Autorisation : Seul le créateur peut modifier
         $riddle = $step->riddle;
         if (Auth::id() !== $riddle->creator_id) {
-            return response()->json(['message' => 'Unauthorized.'], Response::HTTP_FORBIDDEN);
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
         // 2. Validation des données (seulement lat/lon sont modifiables ici)
@@ -201,16 +169,7 @@ class StepController extends Controller
             // C'est une logique plus complexe, souvent gérée côté client ou via une action dédiée.
 
             // Recharger les relations si elles ont pu changer ou pour la réponse
-            $step->load('hints');
-
-            // Regénérer l'URL QR (au cas où, bien que la valeur QR ne change pas ici)
-            if ($step->qr_code) {
-                $fileName = 'step_qr_' . $step->id . '.png';
-                $filePath = 'qrcodes/' . $fileName;
-                if (Storage::disk('public')->exists($filePath)) {
-                    $step->qr_code_image_url = Storage::url($filePath);
-                } // Ne pas regénérer ici pour l'update, sauf si nécessaire
-            }
+            // $step->load('hints');
 
 
             return response()->json($step, Response::HTTP_OK);
@@ -231,22 +190,14 @@ class StepController extends Controller
     public function destroy(Step $step): JsonResponse
     {
         // 1. Autorisation
-        $riddle = $step->riddle;
-        if (Auth::id() !== $riddle->creator_id) {
-            return response()->json(['message' => 'Unauthorized.'], Response::HTTP_FORBIDDEN);
+        if (Auth::id() !== $step->riddle->creator_id) {
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
         // 2. Logique de suppression
         try {
             $orderDeleted = $step->order_number;
             $riddleId = $step->riddle_id;
-
-            // Supprimer l'image QR associée (optionnel)
-            $fileName = 'step_qr_' . $step->id . '.png';
-            $filePath = 'qrcodes/' . $fileName;
-            if (Storage::disk('public')->exists($filePath)) {
-                Storage::disk('public')->delete($filePath);
-            }
 
             $step->delete(); // Supprime l'étape de la base de données
 

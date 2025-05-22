@@ -116,7 +116,7 @@ class GameService implements GameServiceInterface
                 'step_id' => $firstStep->id,
                 'status' => 'active', // Statut initial de l'étape
                 'start_time' => Carbon::now(), // Heure de début
-                'hint_used_number' => 0,
+                'extra_hints' => 0,
             ]);
 
             // Recharger les relations nécessaires pour la réponse
