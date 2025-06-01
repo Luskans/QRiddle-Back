@@ -15,8 +15,8 @@ class ReviewController extends Controller
     /**
      * Get the paginated list of reviews for a riddle.
      *
-     * @param  \App\Models\Riddle  $riddle
-     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Riddle $riddle
+     * @param  \Illuminate\Http\Request $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function index(Riddle $riddle, Request $request): JsonResponse
@@ -29,11 +29,6 @@ class ReviewController extends Controller
         $page = $validated['page'] ?? 1;
         $limit = $validated['limit'] ?? 20;
         $offset = ($page - 1) * $limit;
-
-        // $query = $riddle->reviews()
-        //     ->select(['id', 'content', 'rating', 'difficulty'])
-        //     ->with('user:id,name,image')
-        //     ->orderBy('updated_at', 'desc');
         
         $query = Review::query()
             ->select(['id', 'user_id', 'content', 'rating', 'difficulty', 'updated_at'])
@@ -59,25 +54,15 @@ class ReviewController extends Controller
         ], Response::HTTP_OK);
     }
 
+
     /**
      * Get the 5 last updated reviews for a riddle.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Riddle  $riddle
+     * @param  \App\Models\Riddle $riddle
      * @return \Illuminate\Http\JsonResponse
      */
     public function getTopReviewsByRiddle(Riddle $riddle)
     {
-        // $reviews = $riddle->reviews()
-        //     ->with('user:id,name,image')
-        //     ->orderBy('updated_at', 'desc')
-        //     ->take(5)
-        //     ->get(['id', 'content', 'rating', 'difficulty', 'updated_at']);
-                        
-        // return response()->json([
-        //     'items' => $reviews,
-        // ], Response::HTTP_OK);
-
         $reviews = Review::query()
             ->select(['id', 'user_id', 'content', 'rating', 'difficulty', 'updated_at'])
             ->where('riddle_id', $riddle->id)
@@ -91,11 +76,12 @@ class ReviewController extends Controller
         ], Response::HTTP_OK);
     }
 
+
     /**
      * Create a new review.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Riddle  $riddle
+     * @param  \Illuminate\Http\Request $request
+     * @param  \App\Models\Riddle $riddle
      * @return \Illuminate\Http\JsonResponse
      */
     public function store(Request $request, Riddle $riddle): JsonResponse
@@ -143,11 +129,12 @@ class ReviewController extends Controller
         }
     }
 
+
     /**
      * Update a review.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Review  $review
+     * @param  \Illuminate\Http\Request $request
+     * @param  \App\Models\Review $review
      * @return \Illuminate\Http\JsonResponse
      */
     public function update(Request $request, Review $review): JsonResponse
@@ -176,10 +163,11 @@ class ReviewController extends Controller
         }
     }
 
+
     /**
      * Delete a review.
      *
-     * @param  \App\Models\Review  $review
+     * @param  \App\Models\Review $review
      * @return \Illuminate\Http\JsonResponse
      */
     public function destroy(Review $review): JsonResponse

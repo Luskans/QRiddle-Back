@@ -2,97 +2,57 @@
 
 namespace App\Http\Controllers;
 
+use App\Interfaces\HintServiceInterface;
 use App\Models\Hint;
-use App\Models\Step; // Importer le modèle Step
+use App\Models\Step;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth; // Pour vérifier les autorisations
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule; // Pour la validation du type
+use Illuminate\Validation\Rule;
 
 class HintController extends Controller
 {
-    /**
-     * Affiche la liste des indices pour une étape spécifique.
-     *
-     * @param  \App\Models\Step  $step // Laravel injecte l'étape basée sur l'ID dans l'URL
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function index(Step $step): JsonResponse
+    protected $hintService;
+
+    public function __construct(HintServiceInterface $hintService)
     {
-        // Optionnel: Vérifier si l'utilisateur a le droit de voir ces indices
-        // (par exemple, s'il est le créateur de l'énigme parente)
-        // $this->authorize('view', $step->riddle); // Exemple avec une Policy
-
-        // Récupérer les indices triés par order_number
-        $hints = $step->hints()->orderBy('order_number', 'asc')->get();
-
-        return response()->json(['hints' => $hints], Response::HTTP_OK);
+        $this->hintService = $hintService;
     }
 
     /**
-     * Crée un nouvel indice pour une étape spécifique.
+     * Create a new hint for a step.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Step  $step // Laravel injecte l'étape
+     * @param  \App\Models\Step  $step
      * @return \Illuminate\Http\JsonResponse
      */
     public function store(Request $request, Step $step): JsonResponse
     {
-        // 1. Autorisation : Vérifier si l'utilisateur est le créateur de l'énigme parente
-        if (Auth::id() !== $step->riddle->creator_id) {
-            return response()->json(['message' => 'Unauthorized. You did not create this riddle.'], Response::HTTP_FORBIDDEN);
+        if ($request->user()->id !== $step->riddle->creator_id) {
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
-        // 2. Validation des données reçues
         $validatedData = $request->validate([
-            'type' => ['required', Rule::in(['text', 'image', 'audio'])], // Valider les types autorisés
-            'content' => 'required|string', // Contenu texte ou URL pour image/audio
-            'order_number' => 'nullable|integer|min:1', // Optionnel, on peut le calculer
+            'type' => ['required', Rule::in(['text', 'image', 'audio'])],
+            'content' => 'required|string',
         ]);
 
-        // 3. Calculer le numéro d'ordre si non fourni
-        $nextOrderNumber = ($step->hints()->max('order_number') ?? 0) + 1;
-
-        // 4. Créer l'indice
         try {
-            $hint = $step->hints()->create([
-                'type' => $validatedData['type'],
-                'content' => $validatedData['content'],
-                'order_number' => $validatedData['order_number'] ?? $nextOrderNumber,
-            ]);
-
-            // 5. Retourner l'indice créé
-            return response()->json($hint, Response::HTTP_CREATED);
+            $hint = $this->hintService->createHint($step, $validatedData);
+            
+            return response()->json([
+                'data' => $hint,
+            ], Response::HTTP_CREATED);
 
         } catch (\Exception $e) {
-            Log::error("Error creating hint for step {$step->id}: " . $e->getMessage());
-            return response()->json(['message' => 'Failed to create hint.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            Log::error("Error creating hint: " . $e->getMessage());
+            return response()->json(['message' => 'Erreur serveur lors de la création de l\'indice.'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
     /**
-     * Affiche les détails d'un indice spécifique.
-     * (Grâce à ->shallow(), on reçoit directement $hint)
-     *
-     * @param  \App\Models\Hint  $hint
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function show(Hint $hint): JsonResponse
-    {
-        // Optionnel: Vérifier l'autorisation
-        // $this->authorize('view', $hint->step->riddle);
-
-        // Charger la relation 'step' si nécessaire pour le contexte
-        // $hint->load('step:id,riddle_id');
-
-        return response()->json($hint, Response::HTTP_OK);
-    }
-
-    /**
-     * Met à jour un indice spécifique.
-     * (Grâce à ->shallow(), on reçoit directement $hint)
+     * Update a hint.
      *
      * @param  \Illuminate\Http\Request  $request
      * @param  \App\Models\Hint  $hint
@@ -100,66 +60,85 @@ class HintController extends Controller
      */
     public function update(Request $request, Hint $hint): JsonResponse
     {
-        // 1. Autorisation : Vérifier si l'utilisateur est le créateur
-        if (Auth::id() !== $hint->step->riddle->creator_id) {
-            return response()->json(['message' => 'Unauthorized.'], Response::HTTP_FORBIDDEN);
+        if ($request->user()->id !== $hint->step->riddle->creator_id) {
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
-        // 2. Validation des données (partielles)
         $validatedData = $request->validate([
-            // Utiliser 'sometimes' pour la mise à jour partielle
             'type' => ['sometimes', 'required', Rule::in(['text', 'image', 'audio'])],
             'content' => 'sometimes|required|string',
-            'order_number' => 'sometimes|required|integer|min:1',
         ]);
 
-        // 3. Mettre à jour l'indice
         try {
-            $hint->update($validatedData);
-
-            // Recharger l'indice avec les données à jour (optionnel mais propre)
-            $hint->refresh();
-
-            // 4. Retourner l'indice mis à jour
-            return response()->json($hint, Response::HTTP_OK);
+            $updatedHint = $this->hintService->updateHint($hint, $validatedData);
+            
+            return response()->json([
+                'data' => $updatedHint,
+            ], Response::HTTP_OK);
 
         } catch (\Exception $e) {
             Log::error("Error updating hint {$hint->id}: " . $e->getMessage());
-            return response()->json(['message' => 'Failed to update hint.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => 'Erreur serveur lors de la mise à jour de l\'indice.'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
     /**
-     * Supprime un indice spécifique.
-     * (Grâce à ->shallow(), on reçoit directement $hint)
+     * Delete a hint.
      *
+     * @param  \Illuminate\Http\Request  $request
      * @param  \App\Models\Hint  $hint
      * @return \Illuminate\Http\JsonResponse
      */
-    public function destroy(Hint $hint): JsonResponse
+    public function destroy(Request $request, Hint $hint): JsonResponse
     {
-        // 1. Autorisation : Vérifier si l'utilisateur est le créateur
-        if (Auth::id() !== $hint->step->riddle->creator_id) {
+        if ($request->user()->id !== $hint->step->riddle->creator_id) {
             return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
-        // 2. Supprimer l'indice
         try {
-            $orderDeleted = $hint->order_number;
-            $stepId = $hint->step_id;
-
-            $hint->delete();
-
-            // 3. Retourner une réponse vide avec succès
-            Hint::where('step_id', $stepId)
-                ->where('order_number', '>', $orderDeleted)
-                ->decrement('order_number');
-
-            return response()->json(null, Response::HTTP_NO_CONTENT); // 204 No Content
-
+            $stepId = $this->hintService->deleteHint($hint);
+            
+            return response()->json([
+                'data' => $stepId,
+            ], Response::HTTP_OK);
+            
         } catch (\Exception $e) {
             Log::error("Error deleting hint {$hint->id}: " . $e->getMessage());
-            return response()->json(['message' => 'Failed to delete hint.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => 'Erreur serveur lors de la suppression de l\'indice.'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
+
+    /**
+     * Upload an image for a hint.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Hint  $hint
+     * @return \Illuminate\Http\JsonResponse
+     */
+    // public function uploadImage(Request $request, Hint $hint): JsonResponse
+    // {
+    //     if ($request->user()->id !== $hint->step->riddle->creator_id) {
+    //         return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
+    //     }
+
+    //     $validatedData = $request->validate([
+    //         'image' => 'required|image|max:5120', // 5MB max
+    //     ]);
+
+    //     try {
+    //         $imageUrl = $this->hintService->uploadHintImage($hint, $request->file('image'));
+            
+    //         return response()->json([
+    //             'success' => true,
+    //             'image_url' => $imageUrl,
+    //             'message' => 'Image téléchargée avec succès'
+    //         ], Response::HTTP_OK);
+    //     } catch (\Exception $e) {
+    //         Log::error("Error uploading image for hint {$hint->id}: " . $e->getMessage());
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Erreur lors du téléchargement de l\'image: ' . $e->getMessage()
+    //         ], Response::HTTP_INTERNAL_SERVER_ERROR);
+    //     }
+    // }
 }

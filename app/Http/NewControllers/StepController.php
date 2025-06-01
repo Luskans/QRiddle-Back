@@ -15,34 +15,10 @@ use Illuminate\Support\Facades\Log;
 class StepController extends Controller
 {
     /**
-     * Get the list of steps for a riddle.
-     *
-     * @param  \App\Models\Riddle  $riddle
-     * @return \Illuminate\Http\JsonResponse
-     */
-    // TODO : plus nécessaire, steps ajoutées dans riddle detail
-    // public function index(Riddle $riddle): JsonResponse
-    // {
-    //     if (Auth::id() !== $riddle->creator_id) {
-    //         return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-    //     }
-
-    //     $steps = $riddle->steps()
-    //         ->select('id', 'order_number', 'qr_code')
-    //         ->orderBy('order_number', 'asc')
-    //         ->get();
-
-    //     return response()->json(['steps' => $steps], Response::HTTP_OK);
-    //     return response()->json([
-    //         'items' => $steps,
-    //     ], Response::HTTP_OK);
-    // }
-
-    /**
      * Create a new step for a riddle.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Riddle  $riddle
+     * @param  \Illuminate\Http\Request $request
+     * @param  \App\Models\Riddle $riddle
      * @return \Illuminate\Http\JsonResponse
      */
     public function store(Request $request, Riddle $riddle): JsonResponse
@@ -80,7 +56,7 @@ class StepController extends Controller
     /**
      * Get the detail of a step
      *
-     * @param  \App\Models\Step  $step
+     * @param  \App\Models\Step $step
      * @return \Illuminate\Http\JsonResponse
      */
     public function show(Step $step): JsonResponse
@@ -104,11 +80,12 @@ class StepController extends Controller
         ], Response::HTTP_OK);
     }
 
+
     /**
      * Update a step.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Step  $step
+     * @param  \Illuminate\Http\Request $request
+     * @param  \App\Models\Step $step
      * @return \Illuminate\Http\JsonResponse
      */
     public function update(Request $request, Step $step): JsonResponse
@@ -141,10 +118,11 @@ class StepController extends Controller
         }
     }
 
+
     /**
      * Delete a step.
      *
-     * @param  \App\Models\Step  $step
+     * @param  \App\Models\Step $step
      * @return \Illuminate\Http\JsonResponse
      */
     public function destroy(Step $step): JsonResponse

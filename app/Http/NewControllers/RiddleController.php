@@ -16,49 +16,12 @@ use Illuminate\Support\Str;
 class RiddleController extends Controller
 {
     /**
-     * Get the paginated list of riddles.
+     * Get the list of riddles.
      *
-     * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\JsonResponse
      */
-    // public function index(Request $request): JsonResponse
-    // {
-    //     $validated = $request->validate([
-    //         'page' => 'sometimes|integer|min:1',
-    //         'limit' => 'sometimes|integer|min:1|max:100',
-    //     ]);
-
-    //     $page = $validated['page'] ?? 1;
-    //     $limit = $validated['limit'] ?? 20;
-    //     $offset = ($page - 1) * $limit;
-
-    //     $query = Riddle::query()
-    //         ->select(['id', 'title', 'is_private', 'latitude', 'longitude'])
-    //         ->where('status', 'active')
-    //         ->withCount('steps')
-    //         ->withCount('reviews')
-    //         ->withAvg('reviews', 'rating')
-    //         ->withAvg('reviews', 'difficulty');
-
-    //     $totalQuery = clone $query;
-    //     $totalCount = $totalQuery->count();
-    //     $totalPages = ceil($totalCount / $limit);
-
-    //     $riddles = $query->skip($offset)
-    //         ->take($limit)
-    //         ->get();
-
-    //     return response()->json([
-    //         'items' => $riddles,
-    //         'page' => $page,
-    //         'limit' => $limit,
-    //         'totalItems' => $totalCount,
-    //         'totalPages' => $totalPages,
-    //         'hasMore' => $page < $totalPages,
-    //     ], Response::HTTP_OK);
-    // }
-    // TODO : Sans pagination pour l'instant
-    public function index(Request $request): JsonResponse
+    // TODO : Faire pagination en fonction de la localisation
+    public function index(): JsonResponse
     {
         $riddles = Riddle::query()
             ->select(['id', 'title', 'status', 'is_private', 'updated_at', 'latitude', 'longitude'])
@@ -74,10 +37,11 @@ class RiddleController extends Controller
         ], Response::HTTP_OK);
     }
 
+
     /**
      * Create a new riddle.
      *
-     * @param  \Illuminate\Http\Request  $request
+     * @param  \Illuminate\Http\Request $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function store(Request $request): JsonResponse
@@ -109,10 +73,11 @@ class RiddleController extends Controller
         }
     }
 
+
     /**
      * Get the detail of a riddle.
      *
-     * @param  \App\Models\Riddle  $riddle
+     * @param  \App\Models\Riddle $riddle
      * @return \Illuminate\Http\JsonResponse
      */
     public function show(Riddle $riddle): JsonResponse
@@ -128,16 +93,17 @@ class RiddleController extends Controller
         ], Response::HTTP_OK);
     }
 
+
     /**
      * Update a riddle.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Riddle  $riddle
+     * @param  \Illuminate\Http\Request $request
+     * @param  \App\Models\Riddle $riddle
      * @return \Illuminate\Http\JsonResponse
      */
     public function update(Request $request, Riddle $riddle): JsonResponse
     {
-        if (Auth::id() !== $riddle->creator_id) {
+        if ($request->user()->id !== $riddle->creator_id) {
             return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
@@ -188,10 +154,11 @@ class RiddleController extends Controller
         }
     }
 
+
     /**
      * Delete (soft delete) a riddle.
      *
-     * @param  \App\Models\Riddle  $riddle
+     * @param  \App\Models\Riddle $riddle
      * @return \Illuminate\Http\JsonResponse
      */
     public function destroy(Riddle $riddle): JsonResponse
@@ -211,10 +178,11 @@ class RiddleController extends Controller
         }
     }
 
+
     /**
      * Get a game session with session steps for a riddle.
      *
-     * @param  \App\Models\Riddle
+     * @param  \App\Models\Riddle $riddle
      * @return \Illuminate\Http\JsonResponse
      */
     public function getSessionByRiddle(Riddle $riddle): JsonResponse
@@ -233,12 +201,6 @@ class RiddleController extends Controller
             ], Response::HTTP_NOT_FOUND);
         }
 
-        // return response()->json([
-        //     'data' => [
-        //         'game_session' => $gameSession->only(['id', 'status']),
-        //         'session_steps' => $gameSession->only(['sessionSteps'])
-        //     ]
-        // ], Response::HTTP_OK);
         return response()->json([
             'data' => $gameSession,
         ], Response::HTTP_OK);

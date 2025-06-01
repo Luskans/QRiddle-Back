@@ -21,17 +21,6 @@ class Riddle extends Model
         'longitude'
     ];
 
-    // protected $hidden = [
-    //     'password',
-    // ];
-
-    // protected function casts(): array
-    // {
-    //     return [
-    //         'password' => 'hashed',
-    //     ];
-    // }
-
     public function creator()
     {
         return $this->belongsTo(User::class, 'creator_id');
@@ -55,5 +44,11 @@ class Riddle extends Model
     public function stepsCount()
     {
         return $this->withCount('steps');
+    }
+
+    // TODO : vérifier quelle méthodes plus rapide
+    public function getStepsCountAttribute()
+    {
+        return $this->steps()->count();
     }
 }

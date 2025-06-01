@@ -24,7 +24,7 @@ class LeaderboardController extends Controller
     /**
      * Get the paginated list of global ranking by period.
      *
-     * @param Request  $request
+     * @param Request $request
      * @return JsonResponse
      */
     public function getGlobalRanking(Request $request): JsonResponse
@@ -83,10 +83,12 @@ class LeaderboardController extends Controller
         ], Response::HTTP_OK);
     }
 
+
     /**
      * Get the paginated list of riddle ranking.
      *
-     * @param Request  $request
+     * @param Request $request
+     * @param  \App\Models\Riddle $riddle
      * @return JsonResponse
      */
     public function getRiddleRanking(Riddle $riddle, Request $request): JsonResponse
@@ -145,10 +147,11 @@ class LeaderboardController extends Controller
         ], Response::HTTP_OK);
     }
 
+
     /**
      * Get the top 5 of global ranking by period.
      *
-     * @param Request  $request
+     * @param Request $request
      * @return JsonResponse
      */
     public function getTopGlobalRanking(Request $request): JsonResponse
@@ -191,10 +194,12 @@ class LeaderboardController extends Controller
         ], Response::HTTP_OK);
     }
 
+
     /**
      * Get the top 5 list of riddle ranking.
      *
-     * @param Request  $request
+     * @param Request $request
+     * @param  \App\Models\Riddle $riddle
      * @return JsonResponse
      */
     public function getTopRiddleRanking(Riddle $riddle, Request $request): JsonResponse

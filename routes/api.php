@@ -1,15 +1,14 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\NewControllers\AuthController;
-use App\Http\NewControllers\GameController;
-use App\Http\NewControllers\HintController;
-use App\Http\NewControllers\LeaderboardController;
-use App\Http\NewControllers\ReviewController;
-use App\Http\NewControllers\RiddleController;
-use App\Http\NewControllers\StepController;
-use App\Http\NewControllers\UserController;
-
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\GameController;
+use App\Http\Controllers\HintController;
+use App\Http\Controllers\LeaderboardController;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\RiddleController;
+use App\Http\Controllers\StepController;
+use App\Http\Controllers\UserController;
 
 
 // --- Public routes ---

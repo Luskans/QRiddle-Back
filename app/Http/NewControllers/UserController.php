@@ -3,6 +3,7 @@
 namespace App\Http\NewControllers;
 
 use App\Interfaces\GameServiceInterface;
+use App\Interfaces\GameSessionServiceInterface;
 use App\Interfaces\RiddleServiceInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +18,7 @@ class UserController extends Controller
     protected $riddleService;
 	protected $gameService;
 
-	public function __construct(RiddleServiceInterface $riddleService, GameServiceInterface $gameService)
+	public function __construct(RiddleServiceInterface $riddleService, GameSessionServiceInterface $gameService)
     {
 		$this->riddleService = $riddleService;
 		$this->gameService = $gameService;
@@ -26,7 +27,7 @@ class UserController extends Controller
     /**
      * Get the paginated list of riddles created by the authenticated user.
      *
-     * @param Request  $request
+     * @param Request $request
      * @return JsonResponse
      */
     public function myCreatedRiddles(Request $request): JsonResponse
@@ -65,10 +66,11 @@ class UserController extends Controller
         ], Response::HTTP_OK);
     }
 
+
     /**
      * Get the paginated list of game sessions played by the authenticated user.
      *
-     * @param Request  $request
+     * @param Request $request
      * @return JsonResponse
      */
     public function myGameSessions(Request $request): JsonResponse
@@ -87,7 +89,6 @@ class UserController extends Controller
         $query = GameSession::query()
             ->select(['id', 'riddle_id', 'status', 'created_at'])
             ->where('user_id', $userId)
-            // ->where('status', '!=', 'active')
             ->orderBy('created_at', 'desc')
             ->with('riddle:id,title,latitude,longitude');
 
@@ -108,6 +109,43 @@ class UserController extends Controller
             'hasMore' => $page < $totalPages,
         ], Response::HTTP_OK);
     }
+
+
+    /**
+     * Get the count of created and played riddles by the authenticated user, and the game session if active.
+     *
+     * @return JsonResponse
+     */
+    public function myHome(): JsonResponse
+	{
+		$userId = Auth::id();
+        
+		try {
+			$createdRiddlesCount = $this->riddleService->getCreatedCount($userId);
+			$playedGamesCount = $this->gameService->getPlayedCount($userId);
+			$activeGameSession = $this->gameService->getHomeActiveSession($userId);
+
+			$data = [
+				'createdCount' => $createdRiddlesCount,
+				'playedCount' => $playedGamesCount,
+				'activeGameSession' => $activeGameSession,
+			];
+
+			return response()->json($data, Response::HTTP_OK);
+            return response()->json([
+                'data' => [
+                    'createdCount' => $createdRiddlesCount,
+                    'playedCount' => $playedGamesCount,
+                    'activeGameSession' => $activeGameSession,
+                ],
+            ], Response::HTTP_OK);
+			
+		} catch (\Exception $e) {
+			Log::error("Home data fetching error for user {$userId}: " . $e->getMessage());
+			return response()->json(['message' => 'Erreur serveur :  les données de l\'accueil n\'ont pas pu être récupéré.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+		}
+	}
+
 
     // /**
     //  * Update authenticated user's profil.
@@ -139,39 +177,4 @@ class UserController extends Controller
 
     //     return response()->json($user, Response::HTTP_OK);
     // }
-
-    /**
-     * Get the count of created and played riddles by the authenticated user, and the game session if active.
-     *
-     * @param Request  $request
-     * @return JsonResponse
-     */
-    public function myHome(Request $request): JsonResponse
-	{
-		$userId = Auth::id();
-
-		if (!$userId) {
-			return response()->json(['message' => 'Utilisateur non authentifié.'], Response::HTTP_UNAUTHORIZED);
-		}
-        
-		try {
-            // return response()->json($data = ['activeGameSession' => "salut"], Response::HTTP_OK);
-			$createdRiddlesCount = $this->riddleService->getCreatedCount($userId);
-			$playedGamesCount = $this->gameService->getPlayedCount($userId);
-			$activeGameSession = $this->gameService->getActiveSession($userId);
-
-			$data = [
-				'createdCount' => $createdRiddlesCount,
-				'playedCount' => $playedGamesCount,
-				'activeGameSession' => $activeGameSession,
-			];
-
-			return response()->json($data, Response::HTTP_OK);
-			
-		} catch (\Exception $e) {
-			Log::error("Home data fetching error for user {$userId}: " . $e->getMessage());
-
-			return response()->json(['message' => 'Erreur serveur.'], Response::HTTP_INTERNAL_SERVER_ERROR);
-		}
-	}
 }

@@ -2,24 +2,14 @@
 
 namespace App\Interfaces;
 
+use App\Models\GameSession;
 use App\Models\Riddle;
 
 interface ScoreServiceInterface
 {
-    public function getRankingByPeriod(string $period, ?int $limit, ?int $offset = null);
-
-    public function getAggregateRanking(?int $limit = null, ?int $offset = null): array;
-    
-    
-    // NEW
-    public function getGlobalRankingByPeriod(string $period, int $limit, int $offset): array;
-    
-    public function getGlobalUserRankByPeriod(string $period, int $userId): array | null;
-    
-    public function getAggregateGlobalUserRank(int $userId): array;
-
-    public function getRankingByRiddle(Riddle $riddle, int $limit, int $offset): array;
-
-    public function getUserRankByRiddle(Riddle $riddle, int $userId): array | null;
-
+    public function getGlobalRanking(string $period, int $page, int $limit, int $userId);
+    public function getRiddleRanking(Riddle $riddle, int $page, int $limit, int $userId);
+    public function getTopGlobalRanking(string $period, int $userId);
+    public function getTopRiddleRanking(Riddle $riddle, int $userId);
+    public function calculateFinalScore(GameSession $gameSession);
 }

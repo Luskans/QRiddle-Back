@@ -2,190 +2,136 @@
 
 namespace App\Http\Controllers;
 
+use App\Interfaces\GameSessionServiceInterface;
+use App\Interfaces\RiddleServiceInterface;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use App\Models\Riddle; // Importer le modèle Riddle
-use App\Models\GameSession; // Importer le modèle GameSession
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 
 class UserController extends Controller
 {
+    protected $riddleService;
+    protected $gameSessionService;
+
+    public function __construct(
+        RiddleServiceInterface $riddleService,
+        GameSessionServiceInterface $gameSessionService,
+    ) {
+        $this->riddleService = $riddleService;
+        $this->gameSessionService = $gameSessionService;
+    }
+
     /**
-     * Récupère la liste paginée des énigmes créées par l'utilisateur authentifié.
+     * Get the paginated list of riddles created by the authenticated user.
      *
-     * @param Request $request
+     * @param Request  $request
      * @return JsonResponse
      */
     public function myCreatedRiddles(Request $request): JsonResponse
     {
-        $userId = Auth::id();
-        if (!$userId) {
-            return response()->json(['message' => 'Utilisateur non authentifié.'], Response::HTTP_UNAUTHORIZED);
-        }
+        $userId = $request->user()->id;
 
         $validated = $request->validate([
-            'limit' => 'sometimes|integer|min:1|max:100',
-            'offset' => 'sometimes|integer|min:0',
-        ]);
-
-        $limit = $validated['limit'] ?? null;
-        $offset = $validated['offset'] ?? 0;
-
-        $query = Riddle::query()
-                        ->select(['id', 'title', 'status', 'is_private', 'updated_at', 'latitude', 'longitude'])
-                        ->where('creator_id', $userId)
-                        ->orderBy('updated_at', 'desc');
-
-
-        // Cloner pour compter le total avant pagination
-        $totalQuery = clone $query;
-        $totalCount = $totalQuery->count();
-
-        // Appliquer la pagination
-        $riddles = $query->skip($offset)
-                         ->take($limit)
-                         ->get();
-
-        return response()->json([
-            'riddles' => $riddles,
-            'meta' => [
-                'offset' => $offset,
-                'limit' => $limit,
-                'total' => $totalCount,
-                'hasMore' => ($offset + count($riddles)) < $totalCount,
-            ]
-        ], Response::HTTP_OK);
-    }
-
-    public function myCreatedRiddles2(Request $request): JsonResponse
-    {
-        $userId = Auth::id();
-        if (!$userId) {
-            return response()->json(['message' => 'Utilisateur non authentifié.'], Response::HTTP_UNAUTHORIZED);
-        }
-
-        $validated = $request->validate([
-            'page' => 'sometimes|integer|min:1',  // Changé de offset à page
+            'page' => 'sometimes|integer|min:1',
             'limit' => 'sometimes|integer|min:1|max:100',
         ]);
 
-        $page = $validated['page'] ?? 1;  // Page par défaut = 1
-        $limit = $validated['limit'] ?? 10;  // Limite par défaut = 10
-        $offset = ($page - 1) * $limit;  // Calcul de l'offset à partir de la page
+        $page = $validated['page'] ?? 1;
+        $limit = $validated['limit'] ?? 20;
 
-        $query = Riddle::query()
-                        ->select(['id', 'title', 'status', 'is_private', 'updated_at', 'latitude', 'longitude'])
-                        ->where('creator_id', $userId)
-                        ->orderBy('updated_at', 'desc');
+        try {
+            $result = $this->riddleService->getCreatedRiddles($userId, $page, $limit);
+            
+            return response()->json($result, Response::HTTP_OK);
 
-        // Cloner pour compter le total avant pagination
-        $totalQuery = clone $query;
-        $totalCount = $totalQuery->count();
-        $totalPages = ceil($totalCount / $limit);
-
-        // Appliquer la pagination
-        $riddles = $query->skip($offset)
-                        ->take($limit)
-                        ->get();
-
-        return response()->json([
-            'items' => $riddles,  // Renommé riddles en items pour plus de clarté
-            'page' => $page,
-            'limit' => $limit,
-            'totalItems' => $totalCount,
-            'totalPages' => $totalPages,
-            'hasMore' => $page < $totalPages,
-        ], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            Log::error("Error fetching created riddles for user {$userId}: " . $e->getMessage());
+            return response()->json(['message' => 'Erreur serveur lors de la récupération des énigmes créées.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     /**
-     * Récupère la liste paginée des sessions de jeu de l'utilisateur authentifié.
+     * Get the paginated list of game sessions played by the authenticated user.
      *
-     * @param Request $request
+     * @param Request  $request
      * @return JsonResponse
      */
     public function myGameSessions(Request $request): JsonResponse
     {
-        $userId = Auth::id();
-        if (!$userId) {
-            return response()->json(['message' => 'Utilisateur non authentifié.'], Response::HTTP_UNAUTHORIZED);
-        }
+        $userId = $request->user()->id;
 
         $validated = $request->validate([
+            'page' => 'sometimes|integer|min:1',
             'limit' => 'sometimes|integer|min:1|max:100',
-            'offset' => 'sometimes|integer|min:0',
         ]);
 
+        $page = $validated['page'] ?? 1;
         $limit = $validated['limit'] ?? 20;
-        $offset = $validated['offset'] ?? 0;
 
-        $query = GameSession::select('id', 'status', 'riddle_id', 'created_at')
-                            ->where('player_id', $userId)
-                            ->where('status', '!=', 'active')
-                            ->orderBy('created_at', 'desc')
-                            ->with('riddle:id,title,latitude,longitude');
+        try {
+            $result = $this->gameSessionService->getPlayedGameSessions($userId, $page, $limit);
+            
+            return response()->json($result, Response::HTTP_OK);
 
-
-        // Cloner pour compter le total
-        $totalQuery = clone $query;
-        $totalCount = $totalQuery->count();
-
-        // Appliquer la pagination
-        $gameSessions = $query->skip($offset)
-                              ->take($limit)
-                              ->get(['id', 'riddle_id', 'status', 'score', 'created_at', 'updated_at']);
-
-        return response()->json([
-            'sessions' => $gameSessions,
-            'meta' => [
-                'offset' => $offset,
-                'limit' => $limit,
-                'total' => $totalCount,
-                'hasMore' => ($offset + count($gameSessions)) < $totalCount,
-            ]
-        ], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            Log::error("Error fetching game sessions for user {$userId}: " . $e->getMessage());
+            return response()->json(['message' => 'Erreur serveur lors de la récupération des parties jouées.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     /**
-     * Mettre à jour le profil de l'utilisateur authentifié (Exemple).
+     * Update authenticated user's profile.
      *
-     * @param Request $request
+     * @param Request  $request
      * @return JsonResponse
      */
-    // public function updateProfile(Request $request): JsonResponse
+    // public function update(Request $request): JsonResponse
     // {
-    //     $user = Auth::user();
-    //     if (!$user) {
-    //         return response()->json(['message' => 'Unauthenticated.'], Response::HTTP_UNAUTHORIZED);
-    //     }
-
     //     $validated = $request->validate([
     //         'name' => 'sometimes|required|string|max:255',
-    //         'email' => [
-    //             'sometimes',
-    //             'required',
-    //             'string',
-    //             'email',
-    //             'max:255',
-    //             Rule::unique('users')->ignore($user->id), // Ignorer l'email actuel de l'utilisateur
-    //         ],
-    //         // Ajouter la validation pour l'image si elle est modifiable
-    //         // 'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+    //         'description' => 'sometimes|nullable|string|max:1000',
+    //         'image' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
     //     ]);
 
-    //     // Gérer l'upload d'image si fourni
-    //     // if ($request->hasFile('image')) {
-    //     //     // Supprimer l'ancienne image si elle existe et n'est pas l'image par défaut
-    //     //     if ($user->image && $user->image !== '/default/user.webp') {
-    //     //         Storage::disk('public')->delete(str_replace('/storage', '', $user->image));
-    //     //     }
-    //     //     $path = $request->file('image')->store('profile_images', 'public');
-    //     //     $validated['image'] = Storage::url($path); // Stocker l'URL publique
-    //     // }
-
-    //     $user->update($validated);
-
-    //     return response()->json($user, Response::HTTP_OK);
+    //     try {
+    //         $user = $this->userService->updateProfile($request->user(), $validated, $request->file('image'));
+            
+    //         return response()->json([
+    //             'data' => $user,
+    //         ], Response::HTTP_OK);
+    //     } catch (\Exception $e) {
+    //         Log::error("Error updating user profile: " . $e->getMessage());
+    //         return response()->json(['message' => 'Erreur serveur lors de la mise à jour du profil.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+    //     }
     // }
+
+    /**
+     * Get the count of created and played riddles by the authenticated user, and the game session if active.
+     *
+     * @param Request  $request
+     * @return JsonResponse
+     */
+    public function myHome(Request $request): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        try {
+            $createdRiddlesCount = $this->riddleService->getCreatedCount($userId);
+            $playedGamesCount = $this->gameSessionService->getPlayedCount($userId);
+            $activeGameSession = $this->gameSessionService->getHomeActiveSession($userId);
+
+            $data = [
+                'createdCount' => $createdRiddlesCount,
+                'playedCount' => $playedGamesCount,
+                'activeGameSession' => $activeGameSession,
+            ];
+
+            return response()->json($data, Response::HTTP_OK);
+
+        } catch (\Exception $e) {
+            Log::error("Home data fetching error for user {$userId}: " . $e->getMessage());
+            return response()->json(['message' => 'Erreur serveur lors de la récupération des données de l\'accueil.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
 }

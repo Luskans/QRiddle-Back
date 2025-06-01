@@ -2,18 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Interfaces\ReviewServiceInterface;
 use App\Models\Review;
 use App\Models\Riddle;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 
 class ReviewController extends Controller
 {
+    protected $reviewService;
+
+    public function __construct(ReviewServiceInterface $reviewService)
+    {
+        $this->reviewService = $reviewService;
+    }
+
     /**
-     * Affiche la liste paginée des avis pour une énigme spécifique.
+     * Get the paginated list of reviews for a riddle.
      *
      * @param  \App\Models\Riddle  $riddle
      * @param  \Illuminate\Http\Request  $request
@@ -21,40 +28,47 @@ class ReviewController extends Controller
      */
     public function index(Riddle $riddle, Request $request): JsonResponse
     {
-        // Validation pour la pagination
         $validated = $request->validate([
+            'page' => 'sometimes|integer|min:1',
             'limit' => 'sometimes|integer|min:1|max:100',
-            'offset' => 'sometimes|integer|min:0',
         ]);
 
-        $limit = $validated['limit'] ?? 15; // Limite par défaut
-        $offset = $validated['offset'] ?? 0;
+        $page = $validated['page'] ?? 1;
+        $limit = $validated['limit'] ?? 20;
 
-        // Récupérer les avis pour cette énigme, avec les infos de l'utilisateur
-        // Trier par date de création la plus récente
-        $reviewsQuery = $riddle->reviews()
-                               ->with('user:id,name,image') // Charger les infos de l'auteur
-                               ->latest(); // Ou orderBy('created_at', 'desc')
-
-        // Compter le total avant la pagination
-        $totalCount = $reviewsQuery->count();
-
-        // Appliquer la pagination
-        $reviews = $reviewsQuery->skip($offset)->take($limit)->get();
-
-        return response()->json([
-            'reviews' => $reviews,
-            'meta' => [
-                'offset' => $offset,
-                'limit' => $limit,
-                'total' => $totalCount,
-                'hasMore' => ($offset + count($reviews)) < $totalCount,
-            ]
-        ], Response::HTTP_OK);
+        try {
+            $result = $this->reviewService->getPaginatedReviews($riddle, $page, $limit);
+            
+            return response()->json($result, Response::HTTP_OK);
+        } catch (\Exception $e) {
+            Log::error("Error fetching reviews for riddle {$riddle->id}: " . $e->getMessage());
+            return response()->json(['message' => 'Erreur serveur lors de la récupération des avis.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     /**
-     * Enregistre un nouvel avis pour une énigme.
+     * Get the 5 last updated reviews for a riddle.
+     *
+     * @param  \App\Models\Riddle  $riddle
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTopReviewsByRiddle(Riddle $riddle): JsonResponse
+    {
+        try {
+            $reviews = $this->reviewService->getTopReviews($riddle, 5);
+            
+            return response()->json([
+                'items' => $reviews,
+            ], Response::HTTP_OK);
+
+        } catch (\Exception $e) {
+            Log::error("Error fetching top reviews for riddle {$riddle->id}: " . $e->getMessage());
+            return response()->json(['message' => 'Erreur serveur lors de la récupération des avis.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Create a new review.
      *
      * @param  \Illuminate\Http\Request  $request
      * @param  \App\Models\Riddle  $riddle
@@ -62,70 +76,32 @@ class ReviewController extends Controller
      */
     public function store(Request $request, Riddle $riddle): JsonResponse
     {
-        $userId = Auth::id();
+        $userId = $request->user()->id;
 
-        // Validation des données reçues
         $validatedData = $request->validate([
-            'content' => 'required|string|max:1000', // Limite de caractères pour le contenu
-            'rating' => 'required|integer|min:1|max:5', // Note entre 1 et 5
-            // 'difficulty' => 'required|integer|min:1|max:5', // Si tu gardes la difficulté sur la review
+            'content' => 'required|string|min:2|max:1000',
+            'rating' => 'required|integer|min:1|max:5',
+            'difficulty' => 'required|integer|min:1|max:5',
         ]);
 
-        // Vérification : L'utilisateur a-t-il déjà laissé un avis pour cette énigme ?
-        // (Optionnel, mais souvent souhaité pour éviter les avis multiples)
-        $existingReview = $riddle->reviews()->where('user_id', $userId)->first();
-        if ($existingReview) {
-            return response()->json(['message' => 'You have already reviewed this riddle.'], Response::HTTP_CONFLICT); // 409 Conflict
-        }
-
-        // Vérification : L'utilisateur a-t-il terminé cette énigme ?
-        // (Optionnel, mais logique : on ne devrait pouvoir noter qu'après avoir joué)
-        // $hasCompleted = $riddle->gameSessions()
-        //                        ->where('player_id', $userId)
-        //                        ->where('status', 'completed') // Assure-toi que ce statut est correct
-        //                        ->exists();
-        // if (!$hasCompleted) {
-        //     return response()->json(['message' => 'You must complete the riddle before reviewing it.'], Response::HTTP_FORBIDDEN); // 403 Forbidden
-        // }
-
-        // Créer l'avis
         try {
-            $review = $riddle->reviews()->create([
-                'user_id' => $userId,
-                'content' => $validatedData['content'],
-                'rating' => $validatedData['rating'],
-                // 'difficulty' => $validatedData['difficulty'], // Si applicable
-            ]);
+            $review = $this->reviewService->createReview($riddle, $userId, $validatedData);
+            
+            return response()->json([
+                'data' => $review,
+            ], Response::HTTP_CREATED);
 
-            // Recharger l'avis avec les infos utilisateur pour la réponse
-            $review->load('user:id,name,image');
-
-            return response()->json($review, Response::HTTP_CREATED); // 201 Created
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['message' => $e->getMessage()], Response::HTTP_FORBIDDEN);
 
         } catch (\Exception $e) {
             Log::error("Error creating review for riddle {$riddle->id} by user {$userId}: " . $e->getMessage());
-            return response()->json(['message' => 'Failed to create review.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => 'Erreur serveur lors de la création de l\'avis.'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
     /**
-     * Affiche les détails d'un avis spécifique.
-     * (Accessible via GET /reviews/{review} grâce à ->shallow())
-     *
-     * @param  \App\Models\Review  $review
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function show(Review $review): JsonResponse
-    {
-        // Charger les relations si nécessaire (ex: utilisateur, énigme)
-        $review->load(['user:id,name,image', 'riddle:id,title']);
-
-        return response()->json($review, Response::HTTP_OK);
-    }
-
-    /**
-     * Met à jour un avis existant.
-     * (Accessible via PUT /reviews/{review} grâce à ->shallow())
+     * Update a review.
      *
      * @param  \Illuminate\Http\Request  $request
      * @param  \App\Models\Review  $review
@@ -133,56 +109,49 @@ class ReviewController extends Controller
      */
     public function update(Request $request, Review $review): JsonResponse
     {
-        // 1. Autorisation : Seul l'auteur de l'avis peut le modifier
-        if (Auth::id() !== $review->user_id) {
-            return response()->json(['message' => 'Unauthorized.'], Response::HTTP_FORBIDDEN); // 403 Forbidden
+        if ($request->user()->id !== $review->user_id) {
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
-        // 2. Validation des données (similaire à store, mais pas forcément tout requis)
         $validatedData = $request->validate([
             'content' => 'sometimes|required|string|max:1000',
             'rating' => 'sometimes|required|integer|min:1|max:5',
-            // 'difficulty' => 'sometimes|required|integer|min:1|max:5',
+            'difficulty' => 'sometimes|required|integer|min:1|max:5',
         ]);
 
-        // 3. Mettre à jour l'avis
         try {
-            $review->update($validatedData);
-
-            // Recharger avec l'utilisateur pour la réponse
-            $review->load('user:id,name,image');
-
-            return response()->json($review, Response::HTTP_OK);
+            $updatedReview = $this->reviewService->updateReview($review, $validatedData);
+            
+            return response()->json([
+                'data' => $updatedReview,
+            ], Response::HTTP_OK);
 
         } catch (\Exception $e) {
             Log::error("Error updating review {$review->id}: " . $e->getMessage());
-            return response()->json(['message' => 'Failed to update review.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => 'Erreur serveur lors de la mise à jour de l\'avis.'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
     /**
-     * Supprime un avis.
-     * (Accessible via DELETE /reviews/{review} grâce à ->shallow())
+     * Delete a review.
      *
+     * @param  \Illuminate\Http\Request  $request
      * @param  \App\Models\Review  $review
      * @return \Illuminate\Http\JsonResponse
      */
-    public function destroy(Review $review): JsonResponse
+    public function destroy(Request $request, Review $review): JsonResponse
     {
-        // 1. Autorisation : Seul l'auteur ou un admin peut supprimer
-        // (Ajouter une logique d'admin si nécessaire)
-        if (Auth::id() !== $review->user_id /* && !Auth::user()->isAdmin() */) {
-            return response()->json(['message' => 'Unauthorized.'], Response::HTTP_FORBIDDEN);
+        if ($request->user()->id !== $review->user_id) {
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
-        // 2. Supprimer l'avis
         try {
-            $review->delete();
-            return response()->json(null, Response::HTTP_NO_CONTENT); // 204 No Content
+            $this->reviewService->deleteReview($review);
+            return response()->json(null, Response::HTTP_NO_CONTENT);
 
         } catch (\Exception $e) {
             Log::error("Error deleting review {$review->id}: " . $e->getMessage());
-            return response()->json(['message' => 'Failed to delete review.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => 'Erreur serveur lors de la suppression de l\'avis.'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }
