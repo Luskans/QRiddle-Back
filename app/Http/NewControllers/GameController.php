@@ -24,40 +24,162 @@ class GameController extends Controller
     }
 
     /**
-     * Start a new game session for a riddle and abandon other active session.
+     * Start a new game session for a riddle and abandon other active session, or get active session.
      *
      * @param  \Illuminate\Http\Request
      * @return \Illuminate\Http\JsonResponse
      */
     public function playRiddle(Riddle $riddle, Request $request): JsonResponse
     {
-        $userId = Auth::id();
+        $userId = $request->user()->id;
+
+        // check if a game_session exists for this riddle
+        $existingSession = GameSession::where('riddle_id', $riddle->id)
+            ->where('user_id', $userId)
+            // ->where('status', 'active')
+            ->first();
+        
+        // if yes and it's an active game session, return it
+        if ($existingSession && $existingSession->status === 'active') {
+            return response()->json([
+                'data' => $existingSession,
+            ], Response::HTTP_OK);
+        }
+        
+        // if not and the riddle is private, check the password
+        if (!$existingSession && $riddle->is_private) {
+            $validatedData = $request->validate([
+                'password' => 'required|string|max:255'
+            ]);
+
+            if ($riddle->password !== $validatedData['password']) {
+                return response()->json([
+                    'message' => 'Le mot de passe est incorrect.'
+                ], Response::HTTP_FORBIDDEN);
+            }
+        }
+
+        DB::beginTransaction();
+        try {
+            // delete the existing game_session and session_steps
+            if ($existingSession) {
+                $existingSession->sessionSteps()->delete();
+                $existingSession->delete();
+            }
+
+            // abandon any existing active game_sessions and  the active session_step
+            $activeSessions = GameSession::where('user_id', $userId)
+                ->where('status', 'active')
+                ->get();
+
+            foreach ($activeSessions as $session) {
+                $session->status = 'abandoned';
+                $session->save();
+
+                SessionStep::where('game_session_id', $session->id)
+                    ->where('status', 'active')
+                    ->update(['status' => 'abandoned', 'end_time' => now()]);
+                }
+
+            // create the new game_session and the first session_step
+            $gameSession = GameSession::create([
+                'riddle_id' => $riddle->id,
+                'user_id' => $userId,
+                'status' => 'active',
+                'score' => 0,
+            ]);
+                
+            $firstStep = $riddle->steps()->orderBy('order_number')->first();
+
+            if (!$firstStep) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Cette énigme ne contient aucune étape.'
+                ], Response::HTTP_BAD_REQUEST);
+            }
+            
+            SessionStep::create([
+                'game_session_id' => $gameSession->id,
+                'step_id' => $firstStep->id,
+                'status' => 'active',
+                'start_time' => Carbon::now(),
+                'extra_hints' => 0,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'data' => $gameSession,
+            ], Response::HTTP_CREATED);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error starting new game: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Erreur serveur : la création de la nouvelle partie a échouée.'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Start a new game session for a riddle and abandon other active session, or get active session.
+     *
+     * @param  \Illuminate\Http\Request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function playRiddle3(Riddle $riddle, Request $request): JsonResponse
+    {
+        $userId = $request->user()->id;
 
         $validatedData = $request->validate([
-            'password' => 'nullable|string|max:255'
+            'password' => 'required|string|max:255'
         ]);
 
-        try {            
-            if (!$riddle || $riddle->status !== 'active') {
-                return response()->json(['message' => 'Cette énigme n\'est pas disponible actuellement.'], Response::HTTP_BAD_REQUEST);
+        try {
+            // mettre dans active session           
+            if (!$riddle || $riddle->status !== 'published') {
+                return response()->json([
+                    'message' => 'Cette énigme n\'est pas disponible actuellement.'
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
-            $firstStep= $riddle->steps->first();
-            if (!$firstStep) {
-                return response()->json(['message' => 'Cette énigme n\'a pas encore d\'étape.'], Response::HTTP_BAD_REQUEST);
+            // $firstStep= $riddle->steps->first();
+            // if (!$firstStep) {
+            //     return response()->json([
+            //         'message' => 'Cette énigme n\'a pas encore d\'étape.'
+            //     ], Response::HTTP_BAD_REQUEST);
+            // }
+
+            // $firstHint = $firstStep->hints->first();
+            // if (!$firstHint) {
+            //     return response()->json(['message' => 'Cette énigme n\'a pas encore d\'indice.'], Response::HTTP_BAD_REQUEST);
+            // }
+
+            // mettre dans active session
+            if ($riddle->steps()->count() === 0) {
+                return response()->json([
+                    'message' => 'Cette énigme n\'a pas encore d\'étape.'
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
-            $firstHint = $firstStep->hints->first();
-            if (!$firstHint) {
-                return response()->json(['message' => 'Cette énigme n\'a pas encore d\'indice.'], Response::HTTP_BAD_REQUEST);
+            $stepsWithoutHints = $riddle->steps()
+                ->whereDoesntHave('hints')
+                ->count();
+
+            if ($stepsWithoutHints > 0) {
+                return response()->json([
+                    'message' => 'Certaines étapes n\'ont pas d\'indice.'
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
             if ($riddle->is_private && $riddle->password !== $validatedData['password']) {
-                return response()->json(['message' => 'Le mot de passe est incorrect.'], Response::HTTP_FORBIDDEN);
+                return response()->json([
+                    'message' => 'Le mot de passe est incorrect.'
+                ], Response::HTTP_FORBIDDEN);
             }
             
             DB::transaction(function () use ($userId) {
-                $activeSessions = GameSession::where('player_id', $userId)
+                $activeSessions = GameSession::where('user_id', $userId)
                     ->where('status', 'active')
                     ->get();
 
@@ -70,7 +192,7 @@ class GameController extends Controller
             $gameSession = DB::transaction(function () use ($userId, $riddle, $firstStep) {
                 $gameSession = GameSession::create([
                     'riddle_id' => $riddle->id,
-                    'player_id' => $userId,
+                    'user_id' => $userId,
                     'status' => 'active',
                     'score' => 0,
                 ]);
@@ -106,7 +228,7 @@ class GameController extends Controller
             return response()->json(['message' => 'Erreur serveur : la création de la nouvelle partie a échouée.'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
-    public function playRiddle(Request $request, Riddle $riddle): JsonResponse
+    public function playRiddle2(Request $request, Riddle $riddle): JsonResponse
     {
         $userId = Auth::id();
         
@@ -126,7 +248,7 @@ class GameController extends Controller
         
         // 3. Vérifier si une partie active existe déjà pour cette énigme
         $existingSession = GameSession::where('riddle_id', $riddle->id)
-            ->where('player_id', $userId)
+            ->where('user_id', $userId)
             ->where('status', 'active')
             ->first();
         
@@ -154,7 +276,7 @@ class GameController extends Controller
         
         // 5. Vérifier s'il existe une partie terminée ou abandonnée
         $oldSession = GameSession::where('riddle_id', $riddle->id)
-            ->where('player_id', $userId)
+            ->where('user_id', $userId)
             ->whereIn('status', ['completed', 'abandoned'])
             ->first();
         
@@ -178,7 +300,7 @@ class GameController extends Controller
             // 6b. Créer une nouvelle session
             $gameSession = GameSession::create([
                 'riddle_id' => $riddle->id,
-                'player_id' => $userId,
+                'user_id' => $userId,
                 'status' => 'active',
                 'score' => 0,
             ]);
@@ -218,9 +340,9 @@ class GameController extends Controller
      * @param  \App\Models\GameSession
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getSession(GameSession $gameSession): JsonResponse
+    public function getActiveSession(GameSession $gameSession): JsonResponse
     {
-        if (Auth::id() !== $gameSession->player_id) {
+        if (Auth::id() !== $gameSession->user_id) {
             return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
@@ -234,7 +356,7 @@ class GameController extends Controller
             return response()->json(['message' => 'L\'étape est déjà terminée ou abandonnée.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $stepCount = $gameSession->riddle()->steps()->count();
+        $stepCount = $gameSession->riddle->steps->count();
 
         $step = $sessionStep->step()->with(['hints' => function($query) {
             $query->orderBy('order_number', 'asc');
@@ -259,8 +381,39 @@ class GameController extends Controller
             'data' => [
                 'session_step' => $sessionStep->only(['id', 'extra_hints', 'start_time']),
                 'step' => $step->only(['id', 'order_number']),
-                'step_count' => $stepCount,
+                'stepsCount' => $stepCount,
                 'hints' => $hints,
+            ]
+        ], Response::HTTP_OK);
+    }
+
+    /**
+     * Get the authenticated user's completed game session.
+     *
+     * @param  \App\Models\GameSession
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getCompleteSession(GameSession $gameSession): JsonResponse
+    {
+        if (Auth::id() !== $gameSession->user_id) {
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
+        }
+
+        if ($gameSession->status !== 'completed') {
+            return response()->json(['message' => 'L\'énigme n\'est pas encore réussie.'], Response::HTTP_BAD_REQUEST);
+        }
+
+       $sessionSteps = $gameSession->sessionSteps()
+        ->select('id', 'game_session_id', 'start_time', 'end_time', 'extra_hints')
+        ->get();
+
+        // TODO: calcul score final, get duration
+        return response()->json([
+            'data' => [
+                'id' => $gameSession->id,
+                'riddle_id' => $gameSession->riddle_id,
+                'score' => $gameSession->score,
+                'session_steps' => $sessionSteps
             ]
         ], Response::HTTP_OK);
     }
@@ -274,14 +427,18 @@ class GameController extends Controller
      */
     public function unlockHint(Request $request, GameSession $gameSession)
     {
-        if (Auth::id() !== $gameSession->player_id) {
-            return response()->json(['message' => 'Utilisateur non autorisé'], Response::HTTP_FORBIDDEN);
+        if ($request->user()->id !== $gameSession->user_id) {
+            return response()->json([
+                'message' => 'Utilisateur non autorisé'
+            ], Response::HTTP_FORBIDDEN);
         }
         
         $sessionStep = $gameSession->latestActiveSessionStep;
         
         if (!$sessionStep) {
-            return response()->json(['message' => 'L\'étape est déjà terminée ou abandonnée.'], Response::HTTP_BAD_REQUEST);
+            return response()->json([
+                'message' => 'L\'étape est déjà terminée ou abandonnée.'
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
         
         $validatedData = $request->validate([
@@ -289,17 +446,60 @@ class GameController extends Controller
         ]);
 
         if ($validatedData['hint_order_number'] === 1 || $validatedData['hint_order_number'] <= $sessionStep->extra_hints) {
-            return response()->json(['message' => 'Indice déjà dévérouillé.'], Response::HTTP_BAD_REQUEST);
+            return response()->json([
+                'message' => 'Indice déjà dévérouillé.'
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
         } 
 
-        if (($validatedData['hint_order_number'] - $sessionStep->extra_hints) > 1) {
-            return response()->json(['message' => 'Veuillez dévérouiller l\'indice précédent.'], Response::HTTP_BAD_REQUEST);
+        if (($validatedData['hint_order_number'] - $sessionStep->extra_hints) > 2) {
+            return response()->json([
+                'message' => 'Veuillez dévérouiller l\'indice précédent.'
+            ], Response::HTTP_FORBIDDEN);
         }
         
         $sessionStep->extra_hints += 1;
         $sessionStep->save();
         
-        return $this->activeSession($gameSession);
+        return response()->json([
+            'data' => $gameSession,
+        ], Response::HTTP_OK);
+    }
+    public function unlockHint2(Request $request, GameSession $gameSession)
+    {
+        if ($request->user()->id !== $gameSession->user_id) {
+            return response()->json([
+                'message' => 'Utilisateur non autorisé'
+            ], Response::HTTP_FORBIDDEN);
+        }
+        
+        $sessionStep = $gameSession->latestActiveSessionStep;
+        
+        if (!$sessionStep) {
+            return response()->json([
+                'message' => 'L\'étape est déjà terminée ou abandonnée.'
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+        
+        $validatedData = $request->validate([
+            'hint_order_number' => 'required|numeric',
+        ]);
+
+        if ($validatedData['hint_order_number'] === 1 || $validatedData['hint_order_number'] <= $sessionStep->extra_hints) {
+            return response()->json([
+                'message' => 'Indice déjà dévérouillé.'
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        } 
+
+        if (($validatedData['hint_order_number'] - $sessionStep->extra_hints) > 2) {
+            return response()->json([
+                'message' => 'Veuillez dévérouiller l\'indice précédent.'
+            ], Response::HTTP_FORBIDDEN);
+        }
+        
+        $sessionStep->extra_hints += 1;
+        $sessionStep->save();
+        
+        return $this->getActiveSession($gameSession);
     }
 
     /**
@@ -310,12 +510,12 @@ class GameController extends Controller
      */
     public function abandonSession(GameSession $gameSession): JsonResponse
     {
-        if (Auth::id() !== $gameSession->player_id) {
+        if (Auth::id() !== $gameSession->user_id) {
             return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
         }
 
         if ($gameSession->status !== 'active') {
-            return response()->json(['message' => 'La partie est déjà terminée ou abandonnée.'], Response::HTTP_BAD_REQUEST);
+            return response()->json(['message' => 'La partie est déjà terminée ou abandonnée.'], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         try {
@@ -351,18 +551,18 @@ class GameController extends Controller
      */
     public function validateStep(Request $request, GameSession $gameSession): JsonResponse
     {
-        if (Auth::id() !== $gameSession->player_id) {
-            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        }
-
-        if ($gameSession->status !== 'active') {
-            return response()->json(['message' => 'La partie est déjà terminée ou abandonnée.'], Response::HTTP_BAD_REQUEST);
+        if ($request->user()->id !== $gameSession->user_id) {
+            return response()->json([
+                'message' => 'Utilisateur non autorisé.'
+            ], Response::HTTP_FORBIDDEN);
         }
 
         $sessionStep = $gameSession->latestActiveSessionStep;
         
         if (!$sessionStep) {
-            return response()->json(['message' => 'Aucune étape active trouvée.'], Response::HTTP_NOT_FOUND);
+            return response()->json([
+                'message' => 'La partie est déjà terminée ou abandonnée.'
+            ], Response::HTTP_NOT_FOUND);
         }
         
         $validatedData = $request->validate([
@@ -371,7 +571,81 @@ class GameController extends Controller
         $step = $sessionStep->step;
         
         if ($step->qr_code !== $validatedData['qr_code']) {
-            return response()->json(['message' => 'QR code invalide.'], Response::HTTP_BAD_REQUEST);
+            return response()->json([
+                'message' => 'QR code non valide.'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $data = DB::transaction(function () use ($gameSession, $sessionStep, $step) {
+                $sessionStep->status = 'completed';
+                $sessionStep->end_time = Carbon::now();
+                $sessionStep->save();
+                
+                // $duration = $sessionStep->end_time->diffInSeconds($sessionStep->start_time);
+                // $hintPenalty = $sessionStep->extra_hints * 10; // 10 points de pénalité par indice
+                // $stepScore = max(0, 100 - $hintPenalty - min(50, $duration / 60)); // Max 50 points de pénalité pour le temps
+                // $stepScore = calculateStepScore($sessionStep);
+                // $gameSession->score += $stepScore;
+                
+                $nextStep = $gameSession->riddle->steps()
+                    ->where('order_number', '>', $step->order_number)
+                    ->orderBy('order_number')
+                    ->first();
+                    
+                if ($nextStep) {
+                    SessionStep::create([
+                        'game_session_id' => $gameSession->id,
+                        'step_id' => $nextStep->id,
+                        'status' => 'active',
+                        'start_time' => Carbon::now(),
+                        'extra_hints' => 0,
+                    ]);
+
+                } else {
+                    $gameSession->status = 'completed';
+                }
+                
+                $gameSession->save();
+                
+                return [
+                    'game_completed' => !$nextStep,
+                    'game_session' => $gameSession
+                ];
+            });
+
+            return response()->json([
+                'data' => $data
+            ], Response::HTTP_OK);
+
+        } catch (\Exception $e) {
+            Log::error('Error validating step: ' . $e->getMessage());
+            return response()->json(['message' => 'Erreur serveur : la validation de l\'étape a échouée.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+    public function validateStep2(Request $request, GameSession $gameSession): JsonResponse
+    {
+        if ($request->user()->id !== $gameSession->user_id) {
+            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
+        }
+
+        if ($gameSession->status !== 'active') {
+            return response()->json(['message' => 'La partie est déjà terminée ou abandonnée.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $sessionStep = $gameSession->latestActiveSessionStep;
+        
+        if (!$sessionStep) {
+            return response()->json(['message' => 'La partie est déjà terminée ou abandonnée.'], Response::HTTP_NOT_FOUND);
+        }
+        
+        $validatedData = $request->validate([
+            'qr_code' => 'required|string',
+        ]);
+        $step = $sessionStep->step;
+        
+        if ($step->qr_code !== $validatedData['qr_code']) {
+            return response()->json(['message' => 'QR code non valide.'], Response::HTTP_BAD_REQUEST);
         }
 
         try {
@@ -417,7 +691,7 @@ class GameController extends Controller
                     ], Response::HTTP_OK);
                 }
                 
-                return $this->activeSession($gameSession);
+                return $this->getActiveSession($gameSession);
             });
         } catch (\Exception $e) {
             Log::error('Error validating step: ' . $e->getMessage());

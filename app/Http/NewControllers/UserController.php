@@ -31,7 +31,7 @@ class UserController extends Controller
      */
     public function myCreatedRiddles(Request $request): JsonResponse
     {
-        $userId = Auth::id();
+        $userId = $request->user()->id;
 
         $validated = $request->validate([
             'page' => 'sometimes|integer|min:1',
@@ -73,7 +73,7 @@ class UserController extends Controller
      */
     public function myGameSessions(Request $request): JsonResponse
     {
-        $userId = Auth::id();
+        $userId = $request->user()->id;
 
         $validated = $request->validate([
             'page' => 'sometimes|integer|min:1',
@@ -85,8 +85,8 @@ class UserController extends Controller
         $offset = ($page - 1) * $limit;
 
         $query = GameSession::query()
-            ->select(['id', 'status', 'created_at'])
-            ->where('player_id', $userId)
+            ->select(['id', 'riddle_id', 'status', 'created_at'])
+            ->where('user_id', $userId)
             // ->where('status', '!=', 'active')
             ->orderBy('created_at', 'desc')
             ->with('riddle:id,title,latitude,longitude');
@@ -153,8 +153,9 @@ class UserController extends Controller
 		if (!$userId) {
 			return response()->json(['message' => 'Utilisateur non authentifié.'], Response::HTTP_UNAUTHORIZED);
 		}
-
+        
 		try {
+            // return response()->json($data = ['activeGameSession' => "salut"], Response::HTTP_OK);
 			$createdRiddlesCount = $this->riddleService->getCreatedCount($userId);
 			$playedGamesCount = $this->gameService->getPlayedCount($userId);
 			$activeGameSession = $this->gameService->getActiveSession($userId);

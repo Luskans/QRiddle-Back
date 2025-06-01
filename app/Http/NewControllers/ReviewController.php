@@ -30,10 +30,16 @@ class ReviewController extends Controller
         $limit = $validated['limit'] ?? 20;
         $offset = ($page - 1) * $limit;
 
-        $query = $riddle->reviews()
-            ->select(['id', 'content', 'rating', 'difficulty'])
-            ->with('user:id,name,image')
-            ->orderBy('updated_at', 'desc');
+        // $query = $riddle->reviews()
+        //     ->select(['id', 'content', 'rating', 'difficulty'])
+        //     ->with('user:id,name,image')
+        //     ->orderBy('updated_at', 'desc');
+        
+        $query = Review::query()
+            ->select(['id', 'user_id', 'content', 'rating', 'difficulty', 'updated_at'])
+            ->where('riddle_id', $riddle->id)
+            ->orderBy('updated_at', 'desc')
+            ->with('user:id,name,image');
 
         $totalQuery = clone $query;
         $totalCount = $totalQuery->count();
@@ -54,20 +60,32 @@ class ReviewController extends Controller
     }
 
     /**
-     * Get the 5 last created reviews for a riddle.
+     * Get the 5 last updated reviews for a riddle.
      *
      * @param  \Illuminate\Http\Request  $request
      * @param  \App\Models\Riddle  $riddle
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getTopReviewsForRiddle(Riddle $riddle)
+    public function getTopReviewsByRiddle(Riddle $riddle)
     {
-        $reviews = $riddle->reviews()
-            ->with('user:id,name,image')
+        // $reviews = $riddle->reviews()
+        //     ->with('user:id,name,image')
+        //     ->orderBy('updated_at', 'desc')
+        //     ->take(5)
+        //     ->get(['id', 'content', 'rating', 'difficulty', 'updated_at']);
+                        
+        // return response()->json([
+        //     'items' => $reviews,
+        // ], Response::HTTP_OK);
+
+        $reviews = Review::query()
+            ->select(['id', 'user_id', 'content', 'rating', 'difficulty', 'updated_at'])
+            ->where('riddle_id', $riddle->id)
             ->orderBy('updated_at', 'desc')
+            ->with('user:id,name,image')
             ->take(5)
             ->get();
-                        
+
         return response()->json([
             'items' => $reviews,
         ], Response::HTTP_OK);
@@ -99,7 +117,7 @@ class ReviewController extends Controller
         }
 
         $gameCompleted = $riddle->gameSessions()
-            ->where('player_id', $userId)
+            ->where('user_id', $userId)
             ->where('status', 'completed')
             ->exists();
 

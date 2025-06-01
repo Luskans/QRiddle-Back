@@ -20,7 +20,7 @@ class GameSessionFactory extends Factory
     {
         return [
             'riddle_id' => Riddle::factory(),
-            'player_id' => User::factory(),
+            'user_id' => User::factory(),
             'status' => fake()->randomElement(['active', 'completed', 'abandoned']),
             'score' => fake()->numberBetween(0, 100),
         ];

@@ -41,8 +41,8 @@ class GameController extends Controller
         try {
             $riddle = Riddle::find($validatedData['riddle_id']);
             
-            // Vérifie si l'énigme existe et active
-            if (!$riddle || $riddle->status !== 'active') {
+            // Vérifie si l'énigme existe et publiée
+            if (!$riddle || $riddle->status !== 'published') {
                 return response()->json(['message' => 'Cette énigme n\'est pas disponible actuellement.'], Response::HTTP_BAD_REQUEST);
                 return response()->json([
                     'success' => false,

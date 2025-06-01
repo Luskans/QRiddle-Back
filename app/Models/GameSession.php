@@ -12,7 +12,7 @@ class GameSession extends Model
 
     protected $fillable = [
         'riddle_id',
-        'player_id',
+        'user_id',
         'status',
         'score'
     ];
@@ -22,9 +22,9 @@ class GameSession extends Model
         return $this->belongsTo(Riddle::class);
     }
 
-    public function player()
+    public function user()
     {
-        return $this->belongsTo(User::class, 'player_id');
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     public function sessionSteps()

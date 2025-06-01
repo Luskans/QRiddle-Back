@@ -205,7 +205,7 @@ class DatabaseSeeder extends Seeder
     //     // GameSessions and SessionSteps completed for Jean
     //     $gameSession1 = GameSession::factory()->create([
     //         'riddle_id'  => $riddle1->id,
-    //         'player_id'  => $jean->id,
+    //         'user_id'  => $jean->id,
     //         'status'     => 'completed'
     //     ]);
     //     for ($i = 1; $i <= $riddle1->steps()->count(); $i++) {
@@ -222,7 +222,7 @@ class DatabaseSeeder extends Seeder
     //     // GameSessions and SessionSteps active for Jean
     //     $gameSession2 = GameSession::factory()->create([
     //         'riddle_id'  => $riddle2->id,
-    //         'player_id'  => $jean->id,
+    //         'user_id'  => $jean->id,
     //         'status'     => 'active'
     //     ]);
     //     for ($i = 1; $i < 4; $i++) {
@@ -261,14 +261,14 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // Créer les utilisateurs spécifiques
-        $sylvain = User::create([
+        $sylvain = User::factory()->create([
             'name' => 'Sylvain',
             'email' => 'a@a',
             'password' => Hash::make('a'),
             'email_verified_at' => now(),
         ]);
 
-        $jean = User::create([
+        $jean = User::factory()->create([
             'name' => 'Jean',
             'email' => 'b@b',
             'password' => Hash::make('b'),
@@ -318,7 +318,7 @@ class DatabaseSeeder extends Seeder
         foreach ($allUsers as $user) {
             // Récupérer les énigmes que l'utilisateur n'a pas créées et qui sont actives
             $availableRiddles = $riddles->where('creator_id', '!=', $user->id)
-                                       ->where('status', 'active')
+                                       ->where('status', 'published')
                                        ->values();
             
             if ($availableRiddles->isEmpty()) {
@@ -345,7 +345,7 @@ class DatabaseSeeder extends Seeder
                 // Créer la session de jeu
                 $gameSession = GameSession::create([
                     'riddle_id' => $riddle->id,
-                    'player_id' => $user->id,
+                    'user_id' => $user->id,
                     'status' => $status,
                     'score' => $status === 'completed' ? rand(50, 100) : 0,
                 ]);
@@ -370,7 +370,7 @@ class DatabaseSeeder extends Seeder
      */
     private function getRandomStatus(): string
     {
-        $statuses = ['draft', 'active', 'active', 'active', 'disabled']; // Plus de chances d'être active
+        $statuses = ['draft', 'published', 'published', 'published', 'disabled']; // Plus de chances d'être publié
         return $statuses[array_rand($statuses)];
     }
 
@@ -380,7 +380,7 @@ class DatabaseSeeder extends Seeder
     private function getSessionStatus(bool $hasActiveSession): string
     {
         if ($hasActiveSession) {
-            $statuses = ['completed', 'abandoned'];
+            $statuses = ['completed', 'completed', 'abandoned'];
             return $statuses[array_rand($statuses)];
         } else {
             $statuses = ['active', 'completed', 'completed', 'abandoned'];
@@ -394,68 +394,158 @@ class DatabaseSeeder extends Seeder
     private function createSessionSteps($gameSession, $steps, $sessionStatus): void
     {
         $now = Carbon::now();
-        $hasActiveStep = false;
+        $stepsCount = $steps->count();
         
-        foreach ($steps as $index => $step) {
-            // Déterminer le statut de l'étape de session
-            $stepStatus = $this->getStepStatus($sessionStatus, $index, $steps->count(), $hasActiveStep);
-            
-            // Si c'est une étape active, marquer qu'on a déjà une étape active
-            if ($stepStatus === 'active') {
-                $hasActiveStep = true;
-            }
-            
-            // Calculer les temps de début et de fin
-            $startTime = $now->copy()->subHours(rand(1, 24))->subMinutes(rand(0, 59));
-            $endTime = null;
-            
-            if ($stepStatus === 'completed' || $stepStatus === 'abandoned') {
+        // Si la session est complétée, toutes les étapes sont complétées
+        if ($sessionStatus === 'completed') {
+            foreach ($steps as $index => $step) {
+                $startTime = $now->copy()->subHours($stepsCount - $index)->subMinutes(rand(0, 59));
                 $duration = rand(5, 30); // Durée en minutes
                 $endTime = $startTime->copy()->addMinutes($duration);
+                
+                SessionStep::create([
+                    'game_session_id' => $gameSession->id,
+                    'step_id' => $step->id,
+                    'extra_hints' => rand(0, $step->hints->count()),
+                    'status' => 'completed',
+                    'start_time' => $startTime,
+                    'end_time' => $endTime,
+                ]);
             }
+        } 
+        // Si la session est abandonnée, les premières étapes sont complétées, puis une est abandonnée
+        elseif ($sessionStatus === 'abandoned') {
+            $abandonedStepIndex = rand(0, $stepsCount - 1);
             
-            // Créer l'étape de session
-            SessionStep::create([
-                'game_session_id' => $gameSession->id,
-                'step_id' => $step->id,
-                'extra_hints' => rand(0, $step->hints->count()),
-                'status' => $stepStatus,
-                'start_time' => $startTime,
-                'end_time' => $endTime,
-            ]);
+            foreach ($steps as $index => $step) {
+                $startTime = $now->copy()->subHours($stepsCount - $index)->subMinutes(rand(0, 59));
+                $endTime = null;
+                $stepStatus = '';
+                
+                if ($index < $abandonedStepIndex) {
+                    $stepStatus = 'completed';
+                    $duration = rand(5, 30); // Durée en minutes
+                    $endTime = $startTime->copy()->addMinutes($duration);
+                } elseif ($index === $abandonedStepIndex) {
+                    $stepStatus = 'abandoned';
+                    $duration = rand(5, 30); // Durée en minutes
+                    $endTime = $startTime->copy()->addMinutes($duration);
+                } else {
+                    // Les étapes après celle abandonnée n'ont pas été commencées
+                    continue; // Ne pas créer d'entrée pour ces étapes
+                }
+                
+                SessionStep::create([
+                    'game_session_id' => $gameSession->id,
+                    'step_id' => $step->id,
+                    'extra_hints' => rand(0, $step->hints->count()),
+                    'status' => $stepStatus,
+                    'start_time' => $startTime,
+                    'end_time' => $endTime,
+                ]);
+            }
+        } 
+        // Si la session est active, les premières étapes sont complétées, puis une est active
+        else {
+            $activeStepIndex = rand(0, $stepsCount - 1);
+            
+            foreach ($steps as $index => $step) {
+                $startTime = $now->copy()->subHours($stepsCount - $index)->subMinutes(rand(0, 59));
+                $endTime = null;
+                $stepStatus = '';
+                
+                if ($index < $activeStepIndex) {
+                    $stepStatus = 'completed';
+                    $duration = rand(5, 30); // Durée en minutes
+                    $endTime = $startTime->copy()->addMinutes($duration);
+                } elseif ($index === $activeStepIndex) {
+                    $stepStatus = 'active';
+                    // Pas de end_time pour une étape active
+                } else {
+                    // Les étapes après celle active n'ont pas été commencées
+                    continue; // Ne pas créer d'entrée pour ces étapes
+                }
+                
+                SessionStep::create([
+                    'game_session_id' => $gameSession->id,
+                    'step_id' => $step->id,
+                    'extra_hints' => rand(0, $step->hints->count()),
+                    'status' => $stepStatus,
+                    'start_time' => $startTime,
+                    'end_time' => $endTime,
+                ]);
+            }
         }
     }
 
-    /**
-     * Obtenir un statut pour une étape de session
-     */
-    private function getStepStatus(string $sessionStatus, int $stepIndex, int $totalSteps, bool $hasActiveStep): string
-    {
-        if ($sessionStatus === 'completed') {
-            return 'completed';
-        } elseif ($sessionStatus === 'abandoned') {
-            // Si la session est abandonnée, les premières étapes sont complétées, puis une est abandonnée
-            $abandonedStepIndex = rand(0, $totalSteps - 1);
-            if ($stepIndex < $abandonedStepIndex) {
-                return 'completed';
-            } elseif ($stepIndex === $abandonedStepIndex) {
-                return 'abandoned';
-            } else {
-                return 'active'; // Les étapes suivantes n'ont pas été commencées
-            }
-        } else { // Session active
-            // Si la session est active, les premières étapes sont complétées, puis une est active
-            if ($hasActiveStep) {
-                return 'active'; // Les étapes suivantes n'ont pas été commencées
-            } else {
-                if ($stepIndex < $totalSteps - 1) {
-                    return rand(0, 1) ? 'completed' : 'active';
-                } else {
-                    return 'active';
-                }
-            }
-        }
-    }
+    // /**
+    //  * Créer les étapes de session pour une session de jeu
+    //  */
+    // private function createSessionSteps($gameSession, $steps, $sessionStatus): void
+    // {
+    //     $now = Carbon::now();
+    //     $hasActiveStep = false;
+        
+    //     foreach ($steps as $index => $step) {
+    //         // Déterminer le statut de l'étape de session
+    //         $stepStatus = $this->getStepStatus($sessionStatus, $index, $steps->count(), $hasActiveStep);
+            
+    //         // Si c'est une étape active, marquer qu'on a déjà une étape active
+    //         if ($stepStatus === 'active') {
+    //             $hasActiveStep = true;
+    //         }
+            
+    //         // Calculer les temps de début et de fin
+    //         $startTime = $now->copy()->subHours(rand(1, 24))->subMinutes(rand(0, 59));
+    //         $endTime = null;
+            
+    //         if ($stepStatus === 'completed' || $stepStatus === 'abandoned') {
+    //             $duration = rand(5, 30); // Durée en minutes
+    //             $endTime = $startTime->copy()->addMinutes($duration);
+    //         }
+            
+    //         // Créer l'étape de session
+    //         SessionStep::create([
+    //             'game_session_id' => $gameSession->id,
+    //             'step_id' => $step->id,
+    //             'extra_hints' => rand(0, $step->hints->count()),
+    //             'status' => $stepStatus,
+    //             'start_time' => $startTime,
+    //             'end_time' => $endTime,
+    //         ]);
+    //     }
+    // }
+
+    // /**
+    //  * Obtenir un statut pour une étape de session
+    //  */
+    // private function getStepStatus(string $sessionStatus, int $stepIndex, int $totalSteps, bool $hasActiveStep): string
+    // {
+    //     if ($sessionStatus === 'completed') {
+    //         return 'completed';
+    //     } elseif ($sessionStatus === 'abandoned') {
+    //         // Si la session est abandonnée, les premières étapes sont complétées, puis une est abandonnée
+    //         $abandonedStepIndex = rand(0, $totalSteps - 1);
+    //         if ($stepIndex < $abandonedStepIndex) {
+    //             return 'completed';
+    //         } elseif ($stepIndex === $abandonedStepIndex) {
+    //             return 'abandoned';
+    //         } else {
+    //             return 'active'; // Les étapes suivantes n'ont pas été commencées
+    //         }
+    //     } else { // Session active
+    //         // Si la session est active, les premières étapes sont complétées, puis une est active
+    //         if ($hasActiveStep) {
+    //             return 'active'; // Les étapes suivantes n'ont pas été commencées
+    //         } else {
+    //             if ($stepIndex < $totalSteps - 1) {
+    //                 return rand(0, 1) ? 'completed' : 'active';
+    //             } else {
+    //                 return 'active';
+    //             }
+    //         }
+    //     }
+    // }
 
     /**
      * Créer des avis pour les énigmes complétées
@@ -465,7 +555,7 @@ class DatabaseSeeder extends Seeder
         // Pour chaque utilisateur
         foreach ($users as $user) {
             // Récupérer les sessions de jeu complétées de l'utilisateur
-            $completedSessions = GameSession::where('player_id', $user->id)
+            $completedSessions = GameSession::where('user_id', $user->id)
                                           ->where('status', 'completed')
                                           ->get();
             
@@ -488,31 +578,26 @@ class DatabaseSeeder extends Seeder
      * Créer des scores globaux pour les utilisateurs
      */
     private function createGlobalScores($users): void
-    {
-        $periods = ['week', 'month', 'all'];
-        
+    {        
         foreach ($users as $user) {
-            foreach ($periods as $period) {
-                // Calculer un score basé sur les sessions complétées
-                $completedSessions = GameSession::where('player_id', $user->id)
-                                              ->where('status', 'completed')
-                                              ->get();
-                
-                $score = $completedSessions->sum('score');
-                
-                // Ajouter un peu d'aléatoire pour différencier les périodes
-                if ($period === 'week') {
-                    $score = min($score, rand(0, 1000));
-                } elseif ($period === 'month') {
-                    $score = min($score, rand(1000, 5000));
-                }
-                
-                GlobalScore::create([
-                    'user_id' => $user->id,
-                    'period' => $period,
-                    'score' => $score,
-                ]);
-            }
+            $weekScore = rand(0, 100);
+            GlobalScore::factory()->create([
+                'user_id' => $user->id,
+                'period'  => 'week',
+                'score'   => $weekScore,
+            ]);
+            $monthScore = rand($weekScore, 500);
+            GlobalScore::factory()->create([
+                'user_id' => $user->id,
+                'period'  => 'month',
+                'score'   => $monthScore,
+            ]);
+            $allScore = rand($monthScore, 2000);
+            GlobalScore::factory()->create([
+                'user_id' => $user->id,
+                'period'  => 'all',
+                'score'   => $allScore,
+            ]);
         }
     }
 

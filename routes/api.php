@@ -18,7 +18,7 @@ Route::post('/login', [AuthController::class, 'login']);
 
 // --- Authenticated routes ---
 Route::middleware('auth:sanctum')->group(function () {
-
+     
      Route::post('/logout', [AuthController::class, 'logout']);
      Route::get('/user', [AuthController::class, 'user']);
           
@@ -31,23 +31,28 @@ Route::middleware('auth:sanctum')->group(function () {
      Route::apiResource('riddles', RiddleController::class);
      Route::get('/riddles/{riddle}/session', [RiddleController::class, 'getSessionByRiddle'])->name('riddles.session');
      Route::post('/riddles/{riddle}/play', [GameController::class, 'playRiddle'])->name('riddles.play');
+     Route::get('/riddles/{riddle}/reviews/top', [ReviewController::class, 'getTopReviewsByRiddle'])->name('riddles.reviews-top');
 
      Route::apiResource('riddles.steps', StepController::class)->except(['index'])->shallow();
      
      Route::apiResource('steps.hints', HintController::class)->except(['index', 'show'])->shallow();
+     // Route::post('/hints/{hint}/upload-image',  [HintController::class, 'uploadImage'])->name('hints.upload-image');
      
      Route::apiResource('riddles.reviews', ReviewController::class)->except(['show'])->shallow();
      
      Route::prefix('game')->name('game.')->group(function () {
-          Route::get('/{game-session}', [GameController::class, 'getSession'])->name('session');
-          Route::post('/{game-session}/validate-step', [GameController::class, 'validateStep'])->name('validate-step');
-          Route::post('/{game-session}/unlock-hint', [GameController::class, 'unlockHint'])->name('unlock-hint');
-          Route::patch('/{game-session}', [GameController::class, 'abandonSession'])->name('abandon-session');
+          Route::get('/{gameSession}', [GameController::class, 'getActiveSession'])->name('active-session');
+          Route::post('/{gameSession}/validate-step', [GameController::class, 'validateStep'])->name('validate-step');
+          Route::post('/{gameSession}/unlock-hint', [GameController::class, 'unlockHint'])->name('unlock-hint');
+          Route::get('/{gameSession}/complete', [GameController::class, 'getCompleteSession'])->name('complete-session');
+          Route::patch('/{gameSession}', [GameController::class, 'abandonSession'])->name('abandon-session');
      });
 
      Route::prefix('leaderboards')->name('leaderboards.')->group(function () {
-        Route::get('/global', [LeaderboardController::class, 'getGlobalRanking'])->name('global');
-        Route::get('/riddles/{riddle}', [LeaderboardController::class, 'getRiddleRanking'])->name('riddle');
+          Route::get('/global', [LeaderboardController::class, 'getGlobalRanking'])->name('global');
+          Route::get('/global/top', [LeaderboardController::class, 'getTopGlobalRanking'])->name('global-top');
+          Route::get('/riddles/{riddle}', [LeaderboardController::class, 'getRiddleRanking'])->name('riddle');
+          Route::get('/riddles/{riddle}/top', [LeaderboardController::class, 'getTopRiddleRanking'])->name('riddle-top');
     });
 });
 

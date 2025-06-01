@@ -119,7 +119,7 @@ class ScoreService implements ScoreServiceInterface
     public function getRankingByRiddle(Riddle $riddle, int $limit, int $offset): array
     {
         $query = DB::table('game_sessions')
-            ->join('users', 'game_sessions.player_id', '=', 'users.id')
+            ->join('users', 'game_sessions.user_id', '=', 'users.id')
             ->select('users.id as user_id', 'users.name', 'users.image', 'game_sessions.score')
             ->where('riddle_id', $riddle->id)
             ->where('status', 'completed')
@@ -137,7 +137,7 @@ class ScoreService implements ScoreServiceInterface
     public function getUserRankByRiddle(Riddle $riddle, int $userId): array | null
     {
         $userScore = DB::table('game_sessions')
-            ->where('player_id', $userId)
+            ->where('user_id', $userId)
             ->where('riddle_id', $riddle->id)
             ->where('status', 'completed')
             ->value('score');

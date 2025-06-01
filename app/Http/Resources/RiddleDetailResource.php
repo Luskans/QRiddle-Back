@@ -15,7 +15,8 @@ class RiddleDetailResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $isCreator = Auth::check() && Auth::id() === $this->creator_id;
+        $user = $request->user();
+        $isCreator = $user && $user->id === $this->creator_id;
 
         return [
             'id' => $this->id,
@@ -26,8 +27,8 @@ class RiddleDetailResource extends JsonResource
             'latitude' => $this->latitude,
             'longitude' => $this->longitude,
             'updated_at' => $this->updated_at->toIso8601String(),
-            // 'stepsCount' => $this->steps_count,
-            // 'reviewsCount' => $this->reviews_count,
+            'stepsCount' => $this->steps_count,
+            'reviewsCount' => $this->reviews_count,
             'averageRating' => $this->reviews_avg_rating ? round($this->reviews_avg_rating, 1) : null,
             'averageDifficulty' => $this->reviews_avg_difficulty ? round($this->reviews_avg_difficulty, 1) : null,
             'password' => $this->when($isCreator, $this->password),

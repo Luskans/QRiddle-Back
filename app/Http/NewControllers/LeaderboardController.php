@@ -21,10 +21,8 @@ class LeaderboardController extends Controller
         $this->scoreService = $scoreService;
     }
 
-    // TODO : séparer ranking et user rank ? évite le refetch avec infinite scroll
-
     /**
-     * Get the paginated list of global ranks by period.
+     * Get the paginated list of global ranking by period.
      *
      * @param Request  $request
      * @return JsonResponse
@@ -37,13 +35,14 @@ class LeaderboardController extends Controller
             'limit' => 'sometimes|integer|min:1|max:100',
         ]);
 
+        $userId = $request->user()->id;
         $period = $validated['period'];
         $page = $validated['page'] ?? 1;
         $limit = $validated['limit'] ?? 20;
         $offset = ($page - 1) * $limit;
 
         $query = GlobalScore::query()
-            ->select(['id', 'score'])
+            ->select(['id', 'user_id', 'score'])
             ->where('period', $period)
             ->orderBy('score', 'desc')
             ->with('user:id,name,image');
@@ -56,13 +55,11 @@ class LeaderboardController extends Controller
             ->take($limit)
             ->get();
 
-        $user = Auth::user();
-
         $userScore = GlobalScore::query()
             ->select(['id', 'score'])
-            ->where('user_id', $user)
+            ->where('user_id', $userId)
             ->where('period', $period)
-            ->first();
+            ->value('score');
 
         $userRank = null;
         if ($userScore) {
@@ -87,7 +84,7 @@ class LeaderboardController extends Controller
     }
 
     /**
-     * Get the paginated list of riddle ranks.
+     * Get the paginated list of riddle ranking.
      *
      * @param Request  $request
      * @return JsonResponse
@@ -99,12 +96,13 @@ class LeaderboardController extends Controller
             'limit' => 'sometimes|integer|min:1|max:100',
         ]);
 
+        $userId = $request->user()->id;
         $page = $validated['page'] ?? 1;
         $limit = $validated['limit'] ?? 20;
         $offset = ($page - 1) * $limit;
 
         $query = GameSession::query()
-            ->select(['id', 'score'])
+            ->select(['id', 'user_id', 'score'])
             ->where('riddle_id', $riddle->id)
             ->where('status', 'completed')
             ->orderBy('score', 'desc')
@@ -118,14 +116,12 @@ class LeaderboardController extends Controller
             ->take($limit)
             ->get();
 
-        $user = Auth::user();
-
         $userScore = GameSession::query()
             ->select(['id', 'score'])
             ->where('riddle_id', $riddle->id)
-            ->where('user_id', $user)
+            ->where('user_id', $userId)
             ->where('status', 'completed')
-            ->first();
+            ->value('score');
 
         $userRank = null;
         if ($userScore) {
@@ -148,4 +144,94 @@ class LeaderboardController extends Controller
             'hasMore' => $page < $totalPages,
         ], Response::HTTP_OK);
     }
+
+    /**
+     * Get the top 5 of global ranking by period.
+     *
+     * @param Request  $request
+     * @return JsonResponse
+     */
+    public function getTopGlobalRanking(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'period' => 'required|in:week,month,all',
+        ]);
+
+        $period = $validated['period'];
+        $userId = $request->user()->id;
+
+        $globalRanking = GlobalScore::query()
+            ->select(['id', 'user_id', 'score'])
+            ->where('period', $period)
+            ->orderBy('score', 'desc')
+            ->with('user:id,name,image')
+            ->take(5)
+            ->get();
+
+        $userScore = GlobalScore::query()
+            ->select(['id', 'score'])
+            ->where('user_id', $userId)
+            ->where('period', $period)
+            ->value('score');
+
+        $userRank = null;
+        if ($userScore) {
+            $userRank = GlobalScore::query()
+                ->where('period', $period)
+                ->where('score', '>', $userScore)
+                ->count() + 1;
+        }
+
+        return response()->json([
+            'items' => $globalRanking,
+            'data' => [
+                'userScore' => $userScore,
+                'userRank' => $userRank,
+            ],
+        ], Response::HTTP_OK);
+    }
+
+    /**
+     * Get the top 5 list of riddle ranking.
+     *
+     * @param Request  $request
+     * @return JsonResponse
+     */
+    public function getTopRiddleRanking(Riddle $riddle, Request $request): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        $riddleRanking = GameSession::query()
+            ->select(['id', 'user_id', 'score'])
+            ->where('riddle_id', $riddle->id)
+            ->where('status', 'completed')
+            ->orderBy('score', 'desc')
+            ->with('user:id,name,image')
+            ->take(5)
+            ->get();
+
+        $userScore = GameSession::query()
+            ->select(['id', 'score'])
+            ->where('riddle_id', $riddle->id)
+            ->where('user_id', $userId)
+            ->where('status', 'completed')
+            ->value('score');
+
+        $userRank = null;
+        if ($userScore) {
+            $userRank = GameSession::query()
+                ->where('riddle_id', $riddle->id)
+                ->where('score', '>', $userScore)
+                ->count() + 1;
+        }
+
+        return response()->json([
+            'items' => $riddleRanking,
+            'data' => [
+                'userScore' => $userScore,
+                'userRank' => $userRank,
+            ],
+        ], Response::HTTP_OK);
+    }
+
 }

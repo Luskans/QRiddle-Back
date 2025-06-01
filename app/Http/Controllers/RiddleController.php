@@ -39,7 +39,7 @@ class RiddleController extends Controller
 
         $query = Riddle::query()
             ->select(['id', 'title', 'is_private', 'latitude', 'longitude'])
-            ->where('status', 'active')
+            ->where('status', 'published')
             // Optionnel: Ajouter eager loading pour des infos agrégées si besoin
             ->withCount('steps') // Compte le nombre d'étapes
             ->withCount('reviews') // Compte le nombre d'étapes
@@ -93,7 +93,7 @@ class RiddleController extends Controller
             //     'min:6', // Minimum 6 caractères pour le mot de passe de l'énigme
             //     // Tu peux ajouter des règles Password::defaults() si tu veux forcer la complexité
             // ],
-            'status' => ['sometimes', Rule::in(['draft', 'active'])], // Permet draft ou active à la création
+            'status' => ['sometimes', Rule::in(['draft', 'published'])], // Permet draft ou published à la création
             'latitude' => ['required', 'regex:/^[-]?(([0-8]?[0-9])\.(\d+))|(90(\.0+)?)$/'],
             'longitude' => ['required', 'regex:/^[-]?((((1[0-7][0-9])|([0-9]?[0-9]))\.(\d+))|180(\.0+)?)$/'],
         ]);
@@ -210,7 +210,7 @@ class RiddleController extends Controller
             //     'string',
             //     'min:6',
             // ],
-            'status' => ['sometimes', 'required', Rule::in(['draft', 'active', 'disabled'])], // Tous les statuts possibles
+            'status' => ['sometimes', 'required', Rule::in(['draft', 'published', 'disabled'])], // Tous les statuts possibles
             'latitude' => ['sometimes', 'required', 'regex:/^[-]?(([0-8]?[0-9])\.(\d+))|(90(\.0+)?)$/'],
             'longitude' => ['sometimes', 'required', 'regex:/^[-]?((((1[0-7][0-9])|([0-9]?[0-9]))\.(\d+))|180(\.0+)?)$/'],
         ]);

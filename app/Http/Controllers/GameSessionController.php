@@ -89,8 +89,8 @@ class GameSessionController extends Controller
         try {
             $riddle = Riddle::find($riddleId);
             
-            // Vérifie si l'énigme existe et active
-            if (!$riddle || $riddle->status !== 'active') {
+            // Vérifie si l'énigme existe et publiée
+            if (!$riddle || $riddle->status !== 'published') {
                 return response()->json(['message' => 'Cette énigme n\'est pas disponible actuellement.'], Response::HTTP_INTERNAL_SERVER_ERROR);
             }
 

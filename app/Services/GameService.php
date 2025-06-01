@@ -14,7 +14,7 @@ class GameService implements GameServiceInterface
 {
     public function getPlayedCount(int $userId): int
     {
-        return GameSession::where('player_id', $userId)
+        return GameSession::where('user_id', $userId)
             ->whereIn('status', ['completed', 'abandoned'])
             ->count();
     }
@@ -27,7 +27,7 @@ class GameService implements GameServiceInterface
         //             $query->where('status', 'active')->with('step:id,order_number')->latest('start_time')->limit(1);
         //         }
         //     ])
-        //     ->where('player_id', $userId)
+        //     ->where('user_id', $userId)
         //     ->where('status', 'active')
         //     ->latest('updated_at')
         //     ->first();
@@ -52,7 +52,7 @@ class GameService implements GameServiceInterface
                     }]);
                 }
             ])
-            ->where('player_id', $userId)
+            ->where('user_id', $userId)
             ->where('status', 'active')
             ->latest('updated_at')
             ->first();
@@ -84,7 +84,7 @@ class GameService implements GameServiceInterface
         }])->find($riddleId);
 
         // Vérifier si l'énigme existe et est jouable (statut 'active')
-        if (!$riddle || $riddle->status !== 'active') {
+        if (!$riddle || $riddle->status !== 'published') {
             return [
                 'error' => 'Cette énigme n\'est pas disponible actuellement.',
                 'status_code' => 400 // Bad Request
@@ -105,7 +105,7 @@ class GameService implements GameServiceInterface
             // Créer la GameSession
             $gameSession = GameSession::create([
                 'riddle_id' => $riddle->id,
-                'player_id' => $userId,
+                'user_id' => $userId,
                 'status' => 'active', // Statut initial
                 'score' => 0, // Score initial
             ]);

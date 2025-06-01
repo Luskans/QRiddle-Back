@@ -21,40 +21,56 @@ class RiddleController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\JsonResponse
      */
+    // public function index(Request $request): JsonResponse
+    // {
+    //     $validated = $request->validate([
+    //         'page' => 'sometimes|integer|min:1',
+    //         'limit' => 'sometimes|integer|min:1|max:100',
+    //     ]);
+
+    //     $page = $validated['page'] ?? 1;
+    //     $limit = $validated['limit'] ?? 20;
+    //     $offset = ($page - 1) * $limit;
+
+    //     $query = Riddle::query()
+    //         ->select(['id', 'title', 'is_private', 'latitude', 'longitude'])
+    //         ->where('status', 'active')
+    //         ->withCount('steps')
+    //         ->withCount('reviews')
+    //         ->withAvg('reviews', 'rating')
+    //         ->withAvg('reviews', 'difficulty');
+
+    //     $totalQuery = clone $query;
+    //     $totalCount = $totalQuery->count();
+    //     $totalPages = ceil($totalCount / $limit);
+
+    //     $riddles = $query->skip($offset)
+    //         ->take($limit)
+    //         ->get();
+
+    //     return response()->json([
+    //         'items' => $riddles,
+    //         'page' => $page,
+    //         'limit' => $limit,
+    //         'totalItems' => $totalCount,
+    //         'totalPages' => $totalPages,
+    //         'hasMore' => $page < $totalPages,
+    //     ], Response::HTTP_OK);
+    // }
+    // TODO : Sans pagination pour l'instant
     public function index(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'page' => 'sometimes|integer|min:1',
-            'limit' => 'sometimes|integer|min:1|max:100',
-        ]);
-
-        $page = $validated['page'] ?? 1;
-        $limit = $validated['limit'] ?? 20;
-        $offset = ($page - 1) * $limit;
-
-        $query = Riddle::query()
-            ->select(['id', 'title', 'is_private', 'latitude', 'longitude'])
-            ->where('status', 'active')
+        $riddles = Riddle::query()
+            ->select(['id', 'title', 'status', 'is_private', 'updated_at', 'latitude', 'longitude'])
+            ->where('status', 'published')
             ->withCount('steps')
             ->withCount('reviews')
             ->withAvg('reviews', 'rating')
-            ->withAvg('reviews', 'difficulty');
-
-        $totalQuery = clone $query;
-        $totalCount = $totalQuery->count();
-        $totalPages = ceil($totalCount / $limit);
-
-        $riddles = $query->skip($offset)
-            ->take($limit)
+            ->withAvg('reviews', 'difficulty')
             ->get();
 
         return response()->json([
             'items' => $riddles,
-            'page' => $page,
-            'limit' => $limit,
-            'totalItems' => $totalCount,
-            'totalPages' => $totalPages,
-            'hasMore' => $page < $totalPages,
         ], Response::HTTP_OK);
     }
 
@@ -101,9 +117,9 @@ class RiddleController extends Controller
      */
     public function show(Riddle $riddle): JsonResponse
     { 
-        $riddle->load(['creator:id,name,image', 'steps:id,order_number,qr_code']);
-        // $riddle->loadCount('steps');
-        // $riddle->loadCount('reviews');
+        $riddle->load(['creator:id,name,image', 'steps:id,riddle_id,order_number,qr_code']);
+        $riddle->loadCount('steps');
+        $riddle->loadCount('reviews');
         $riddle->loadAvg('reviews', 'rating');
         $riddle->loadAvg('reviews', 'difficulty');
 
@@ -129,15 +145,33 @@ class RiddleController extends Controller
             'title' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|required|string|max:1000',
             'is_private' => 'sometimes|required|boolean',
-            'status' => ['sometimes', 'required', Rule::in(['draft', 'active', 'disabled'])],
+            'status' => ['sometimes', 'required', Rule::in(['draft', 'published', 'disabled'])],
             'latitude' => ['sometimes', 'required', 'regex:/^[-]?(([0-8]?[0-9])\.(\d+))|(90(\.0+)?)$/'],
             'longitude' => ['sometimes', 'required', 'regex:/^[-]?((((1[0-7][0-9])|([0-9]?[0-9]))\.(\d+))|180(\.0+)?)$/'],
         ]);
 
         if (isset($validatedData['is_private']) && $validatedData['is_private'] === true) {
             $validatedData['password'] = Str::random(6);
-        } else {
+        } else if (isset($validatedData['is_private']) && $validatedData['is_private'] === false) {
             $validatedData['password'] = null;
+        }
+
+        if (isset($validatedData['status']) && ($validatedData['status'] === 'published' || $validatedData['status'] === 'draft')) {
+            if ($riddle->steps()->count() === 0) {
+                return response()->json([
+                    'message' => 'Impossible de publier une énigme sans au moins une étape.'
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+
+            $stepsWithoutHints = $riddle->steps()
+                ->whereDoesntHave('hints')
+                ->count();
+
+            if ($stepsWithoutHints > 0) {
+                return response()->json([
+                    'message' => 'Toutes les étapes doivent avoir au moins un indice.'
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
         }
 
         try {
@@ -189,8 +223,8 @@ class RiddleController extends Controller
 
         $gameSession = GameSession::select('id','status')
             ->where('riddle_id', $riddle->id)
-            ->where('player_id', $userId)
-            ->with('sessionSteps:id,status,start_time,end_time')
+            ->where('user_id', $userId)
+            ->with('sessionSteps:id,game_session_id,status,start_time,end_time')
             ->first();
 
         if (!$gameSession) {
@@ -199,11 +233,14 @@ class RiddleController extends Controller
             ], Response::HTTP_NOT_FOUND);
         }
 
+        // return response()->json([
+        //     'data' => [
+        //         'game_session' => $gameSession->only(['id', 'status']),
+        //         'session_steps' => $gameSession->only(['sessionSteps'])
+        //     ]
+        // ], Response::HTTP_OK);
         return response()->json([
-            'data' => [
-                'game_session' => $gameSession->only(['id', 'status']),
-                'session_steps' => $gameSession->only(['sessionSteps'])
-            ]
+            'data' => $gameSession,
         ], Response::HTTP_OK);
     }
 }

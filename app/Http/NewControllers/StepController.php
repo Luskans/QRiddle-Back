@@ -96,7 +96,7 @@ class StepController extends Controller
 
         $step->load(['hints' => function($query) {
             $query->orderBy('order_number', 'asc')
-                ->select('id', 'order_number', 'type', 'content');
+                ->select('id', 'step_id', 'order_number', 'type', 'content');
         }]);
 
         return response()->json([

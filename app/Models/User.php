@@ -24,6 +24,7 @@ class User extends Authenticatable
         'email',
         'password',
         'image',
+        'description'
     ];
 
     /**
@@ -37,7 +38,7 @@ class User extends Authenticatable
     ];
 
     protected $attributes = [
-        'image' => '/default/user.webp',
+        'image' => '/default/user.png',
     ];
 
     /**
@@ -60,7 +61,7 @@ class User extends Authenticatable
 
     public function gameSessions()
     {
-        return $this->hasMany(GameSession::class, 'player_id');
+        return $this->hasMany(GameSession::class, 'user_id');
     }
 
     public function reviews()

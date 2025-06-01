@@ -17,11 +17,20 @@ class HintFactory extends Factory
      */
     public function definition(): array
     {
+        $type = fake()->randomElement(['text', 'image', 'audio']);
+        
+        $content = match ($type) {
+            'text' => fake()->paragraph,
+            'image' => '/default/image.jpg',
+            'audio' => '/default/audio.mp3',
+            default => fake()->paragraph,
+        };
+
         return [
             'step_id'      => Step::factory(),
             'order_number' => fake()->numberBetween(1, 5),
-            'type'         => fake()->randomElement(['text', 'image', 'audio']),
-            'content'      => fake()->paragraph,
+            'type'         => $type,
+            'content'      => $content,
         ];
     }
 }

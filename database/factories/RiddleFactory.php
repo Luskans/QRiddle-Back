@@ -30,7 +30,7 @@ class RiddleFactory extends Factory
             'description'   => fake()->paragraph,
             'is_private'    => fake()->boolean,
             'password'      => Str::random(8),
-            'status'        => fake()->randomElement(['draft', 'active', 'disabled']),
+            'status'        => fake()->randomElement(['draft', 'published', 'disabled']),
             'latitude'      => fake()->latitude,
             'longitude'     => fake()->longitude,
         ];

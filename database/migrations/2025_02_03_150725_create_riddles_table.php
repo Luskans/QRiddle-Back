@@ -18,7 +18,7 @@ return new class extends Migration
             $table->text('description');
             $table->boolean('is_private')->default(false);
             $table->string('password')->nullable();
-            $table->enum('status', ['draft', 'active', 'disabled'])->default('draft');
+            $table->enum('status', ['draft', 'published', 'disabled'])->default('draft');
             $table->decimal('latitude', 10, 8);
             $table->decimal('longitude', 11, 8);
             $table->softDeletes();
