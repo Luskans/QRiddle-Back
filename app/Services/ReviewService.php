@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Interfaces\ReviewServiceInterface;
 use App\Models\Review;
 use App\Models\Riddle;
-use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 
 class ReviewService implements ReviewServiceInterface
 {
@@ -78,9 +78,7 @@ class ReviewService implements ReviewServiceInterface
             ->first();
 
         if ($existingReview) {
-            throw ValidationException::withMessages([
-                'review' => ['Vous avez déjà laissé un avis pour cette énigme.']
-            ]);
+            throw new \Exception('Vous avez déjà laissé un avis pour cette énigme.', Response::HTTP_FORBIDDEN);
         }
 
         $gameCompleted = $riddle->gameSessions()
@@ -89,9 +87,7 @@ class ReviewService implements ReviewServiceInterface
             ->exists();
 
         if (!$gameCompleted) {
-            throw ValidationException::withMessages([
-                'game' => ['Vous devez avoir terminé l\'énigme pour laisser un avis.']
-            ]);
+            throw new \Exception('Vous devez avoir terminé l\'énigme pour laisser un avis.', Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         return $riddle->reviews()->create([

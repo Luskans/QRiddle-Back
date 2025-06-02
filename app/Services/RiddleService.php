@@ -6,8 +6,7 @@ use App\Interfaces\RiddleServiceInterface;
 use App\Models\GameSession;
 use App\Models\Riddle;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
-
+use Symfony\Component\HttpFoundation\Response;
 
 class RiddleService implements RiddleServiceInterface
 {
@@ -82,9 +81,7 @@ class RiddleService implements RiddleServiceInterface
 
         if (isset($data['status']) && ($data['status'] === 'published' || $data['status'] === 'draft')) {
             if ($riddle->steps()->count() === 0) {
-                throw ValidationException::withMessages([
-                    'steps' => ['Impossible de publier une énigme sans au moins une étape.']
-                ]);
+                throw new \Exception('Impossible de publier une énigme sans au moins une étape.', Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
             $stepsWithoutHints = $riddle->steps()
@@ -92,9 +89,7 @@ class RiddleService implements RiddleServiceInterface
                 ->count();
 
             if ($stepsWithoutHints > 0) {
-                throw ValidationException::withMessages([
-                    'hints' => ['Toutes les étapes doivent avoir au moins un indice.']
-                ]);
+                throw new \Exception('Toutes les étapes doivent avoir au moins un indice.', Response::HTTP_UNPROCESSABLE_ENTITY);
             }
         }
 

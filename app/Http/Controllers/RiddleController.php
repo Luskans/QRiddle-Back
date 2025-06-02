@@ -120,14 +120,9 @@ class RiddleController extends Controller
                 'data' => $updatedRiddle,
             ], Response::HTTP_OK);
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'message' => $e->getMessage()
-            ], Response::HTTP_UNPROCESSABLE_ENTITY);
-
         } catch (\Exception $e) {
             Log::error("Error updating riddle {$riddle->id}: " . $e->getMessage());
-            return response()->json(['message' => 'Erreur serveur lors de la mise à jour de l\'énigme.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?:  'Erreur serveur lors de la mise à jour de l\'énigme.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 

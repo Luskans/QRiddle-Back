@@ -38,8 +38,8 @@ class ReviewController extends Controller
 
         try {
             $result = $this->reviewService->getPaginatedReviews($riddle, $page, $limit);
-            
             return response()->json($result, Response::HTTP_OK);
+
         } catch (\Exception $e) {
             Log::error("Error fetching reviews for riddle {$riddle->id}: " . $e->getMessage());
             return response()->json(['message' => 'Erreur serveur lors de la récupération des avis.'], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -91,12 +91,9 @@ class ReviewController extends Controller
                 'data' => $review,
             ], Response::HTTP_CREATED);
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json(['message' => $e->getMessage()], Response::HTTP_FORBIDDEN);
-
         } catch (\Exception $e) {
             Log::error("Error creating review for riddle {$riddle->id} by user {$userId}: " . $e->getMessage());
-            return response()->json(['message' => 'Erreur serveur lors de la création de l\'avis.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' =>  $e->getMessage() ?: 'Erreur serveur lors de la création de l\'avis.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 

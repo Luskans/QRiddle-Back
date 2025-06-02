@@ -11,165 +11,6 @@ use Illuminate\Support\Facades\DB;
 
 class ScoreService implements ScoreServiceInterface
 {
-    public function getRankingByPeriod(string $period, ?int $limit, ?int $offset = null)
-    {
-        $query = DB::table('global_scores')
-            ->join('users', 'global_scores.user_id', '=', 'users.id')
-            ->select('users.name', 'users.image', 'global_scores.score')
-            ->where('global_scores.period', '=', $period)
-            ->orderByDesc('global_scores.score');
-
-        if (!is_null($limit)) {
-            $query->limit($limit);
-        }
-
-        if (!is_null($offset)) {
-            $query->offset($offset);
-        }
-
-        return $query->get();
-    }
-
-    public function getUserRankByPeriod(string $period, int $userId): array | null
-    {
-        $userScore = DB::table('global_scores')
-            ->where('user_id', $userId)
-            ->where('period', $period)
-            ->value('score');
-
-        if (!$userScore) {
-            return null;
-        }
-
-        $userRank = DB::table('global_scores')
-            ->where('period', $period)
-            ->where('score', '>', $userScore)
-            ->count() + 1;
-
-        return [
-            'score' => $userScore,
-            'rank' => $userRank,
-        ];
-    }
-
-    public function getAggregateRanking(?int $limit = null, ?int $offset = null): array
-    {
-        return [
-            'week'  => $this->getRankingByPeriod('week', $limit, $offset),
-            'month' => $this->getRankingByPeriod('month', $limit, $offset),
-            'all'   => $this->getRankingByPeriod('all', $limit, $offset),
-        ];
-    }
-
-    
-
-
-
-
-
-
-
-    // NEW
-    public function getGlobalRankingByPeriod(string $period, int $limit, int $offset): array
-    {
-        $query = DB::table('global_scores')
-            ->join('users', 'global_scores.user_id', '=', 'users.id')
-            ->select('users.id as user_id', 'users.name', 'users.image', 'global_scores.score')
-            ->where('global_scores.period', '=', $period)
-            ->orderByDesc('global_scores.score')
-            ->skip($offset)
-            ->take($limit)
-            ->get();
-
-            return [
-                'ranking' => $query
-            ];
-    }
-
-    public function getGlobalUserRankByPeriod(string $period, int $userId): array | null
-    {
-        $userScore = DB::table('global_scores')
-            ->where('user_id', $userId)
-            ->where('period', $period)
-            ->value('score');
-
-        if (!$userScore) {
-            return null;
-        }
-
-        $userRank = DB::table('global_scores')
-            ->where('period', $period)
-            ->where('score', '>', $userScore)
-            ->count() + 1;
-
-        return [
-            'score' => $userScore,
-            'rank' => $userRank,
-        ];
-    }
-
-    public function getAggregateGlobalUserRank(int $userId): array
-    {
-        return [
-            'week'  => $this->getGlobalUserRankByPeriod('week', $userId),
-            'month' => $this->getGlobalUserRankByPeriod('month', $userId),
-            'all'   => $this->getGlobalUserRankByPeriod('all', $userId),
-        ];
-    }
-
-    public function getRankingByRiddle(Riddle $riddle, int $limit, int $offset): array
-    {
-        $query = DB::table('game_sessions')
-            ->join('users', 'game_sessions.user_id', '=', 'users.id')
-            ->select('users.id as user_id', 'users.name', 'users.image', 'game_sessions.score')
-            ->where('riddle_id', $riddle->id)
-            ->where('status', 'completed')
-            ->whereNotNull('score')
-            ->orderByDesc('score')
-            ->skip($offset)
-            ->take($limit)
-            ->get();
-
-            return [
-                'ranking' => $query
-            ];
-    }
-
-    public function getUserRankByRiddle(Riddle $riddle, int $userId): array | null
-    {
-        $userScore = DB::table('game_sessions')
-            ->where('user_id', $userId)
-            ->where('riddle_id', $riddle->id)
-            ->where('status', 'completed')
-            ->value('score');
-        
-        if (!$userScore) {
-            return null;
-        }
-
-        $userRank = DB::table('game_sessions')
-            ->where('riddle_id', $riddle->id)
-            ->where('score', '>', $userScore)
-            ->count() + 1;
-
-        return [
-            'score' => $userScore,
-            'rank' => $userRank,
-        ];
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-    // NEW
     /**
      * Get the paginated list of global ranking by period.
      *
@@ -368,9 +209,97 @@ class ScoreService implements ScoreServiceInterface
      * @param GameSession $gameSession
      * @return int
      */
-    public function calculateFinalScore(GameSession $gameSession)
-    {        
-        $test = $gameSession;
-        return 50;
+    public function calculateFinalScore(GameSession $gameSession): int
+    {
+        // Récupérer les données nécessaires
+        $riddle = $gameSession->riddle;
+        $totalSteps = $riddle->steps()->count();
+        
+        // Calculer le temps total en secondes
+        $totalDuration = $gameSession->getTotalDuration();
+        
+        // Récupérer la difficulté moyenne de l'énigme (si disponible)
+        $avgDifficulty = $riddle->reviews()->avg('difficulty') ?: 3; // Valeur par défaut si pas d'avis
+        
+        // Calculer le temps moyen des autres utilisateurs ayant complété cette énigme
+        $avgCompletionTime = GameSession::where('riddle_id', $riddle->id)
+            ->where('status', 'completed')
+            ->where('id', '!=', $gameSession->id)
+            ->get()
+            ->avg(function($session) {
+                return $session->getTotalDuration();
+            }) ?: $totalDuration; // Si pas d'autres sessions, utiliser le temps actuel
+        
+        // Score total pour toutes les étapes
+        $totalScore = 0;
+        
+        // Calculer le score pour chaque étape
+        $sessionSteps = $gameSession->sessionSteps()->with('step')->get();
+        
+        foreach ($sessionSteps as $sessionStep) {
+            // Base score pour chaque étape - 20 points par étape
+            $stepBaseScore = 20;
+            
+            // Pénalité pour les indices supplémentaires
+            $hintPenalty = 0;
+            for ($i = 1; $i <= $sessionStep->extra_hints; $i++) {
+                if ($i === 1) {
+                    $hintPenalty += 3;
+                } else if ($i === 2) {
+                    $hintPenalty += 2;
+                } else {
+                    $hintPenalty += 1;
+                }
+            }
+            
+            // Calculer le score de l'étape (minimum 12 points)
+            $stepScore = max(12, $stepBaseScore - $hintPenalty);
+            
+            // Ajouter au score total
+            $totalScore += $stepScore;
+        }
+        
+        // Bonus de difficulté - facteur multiplicateur basé sur la difficulté
+        $difficultyMultiplier = 1 + (($avgDifficulty - 1) * 0.1); // 1.0, 1.1, 1.2, 1.3, 1.4 pour les niveaux 1-5
+        $scoreWithDifficulty = $totalScore * $difficultyMultiplier;
+        
+        // Bonus/malus de temps - entre -50% et +50%
+        $timeMultiplier = 1.0;
+        if ($avgCompletionTime > 0 && $totalDuration > 0) {
+            // Calculer le ratio de temps (temps moyen / temps utilisateur)
+            $timeRatio = $avgCompletionTime / $totalDuration;
+            
+            // Limiter le multiplicateur entre 0.5 et 1.5 (de -50% à +50%)
+            $timeMultiplier = min(1.5, max(0.5, $timeRatio));
+        }
+        
+        // Appliquer le multiplicateur de temps
+        $finalScore = $scoreWithDifficulty * $timeMultiplier;
+        
+        // Arrondir à l'entier le plus proche
+        return (int) round($finalScore);
+    }
+
+    /**
+     * Update global scores after completing a riddle.
+     *
+     * @param int $userId
+     * @param int $score
+     * @return void
+     */
+    public function updateGlobalScores(int $userId, int $score): void
+    {
+        // Mettre à jour les scores globaux pour les différentes périodes
+        $periods = ['week', 'month', 'all'];
+        
+        foreach ($periods as $period) {
+            $globalScore = GlobalScore::firstOrNew([
+                'user_id' => $userId,
+                'period' => $period
+            ]);
+            
+            $globalScore->score = ($globalScore->score ?? 0) + $score;
+            $globalScore->save();
+        }
     }
 }

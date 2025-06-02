@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Interfaces\GameplayServiceInterface;
+use App\Interfaces\ScoreServiceInterface;
 use App\Models\Riddle;
 use App\Models\GameSession;
+use App\Models\Review;
 use App\Models\SessionStep;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -142,10 +144,16 @@ class GameplayService implements GameplayServiceInterface
             throw new \Exception('L\'énigme n\'est pas encore réussie.', Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
+        $hasReviewed = Review::where('user_id', $user->id)
+            ->where('riddle_id', $session->riddle_id)
+            ->exists();
+
         return [
             'id' => $session->id,
             'riddle_id' => $session->riddle_id,
             'score' => $session->score,
+            'duration' => $session->getTotalDuration(),
+            'has_reviewed' => $hasReviewed,
             'session_steps' => $session->sessionSteps()->select('id', 'game_session_id', 'start_time', 'end_time', 'extra_hints')->get()
         ];
     }
@@ -208,8 +216,23 @@ class GameplayService implements GameplayServiceInterface
                     'start_time' => now(),
                     'extra_hints' => 0
                 ]);
+
             } else {
-                $session->update(['status' => 'completed']);
+                // $session->update(['status' => 'completed']);
+
+                 // C'est la dernière étape, l'énigme est complétée
+                    // Calculer le score final
+                $scoreService = app(ScoreServiceInterface::class);
+                $finalScore = $scoreService->calculateFinalScore($session);
+                
+                // Mettre à jour la session avec le score final
+                $session->update([
+                    'status' => 'completed',
+                    'score' => $finalScore
+                ]);
+                
+                // Mettre à jour les scores globaux
+                $scoreService->updateGlobalScores($session->user_id, $finalScore);
             }
 
             return [

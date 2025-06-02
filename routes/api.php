@@ -43,7 +43,7 @@ Route::middleware('auth:sanctum')->group(function () {
           Route::get('/{gameSession}', [GameController::class, 'getActiveSession'])->name('active-session');
           Route::post('/{gameSession}/validate-step', [GameController::class, 'validateStep'])->name('validate-step');
           Route::post('/{gameSession}/unlock-hint', [GameController::class, 'unlockHint'])->name('unlock-hint');
-          Route::get('/{gameSession}/complete', [GameController::class, 'getCompleteSession'])->name('complete-session');
+          Route::get('/{gameSession}/complete', [GameController::class, 'getCompletedSession'])->name('completed-session');
           Route::patch('/{gameSession}', [GameController::class, 'abandonSession'])->name('abandon-session');
      });
 

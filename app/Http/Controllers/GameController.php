@@ -33,7 +33,7 @@ class GameController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error starting new game: ' . $e->getMessage());
-            return response()->json(['message' => $e->getMessage() | 'Erreur serveur lors de la création de la nouvelle partie.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la création de la nouvelle partie.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -50,7 +50,7 @@ class GameController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error abandoning game: ' . $e->getMessage());
-            return response()->json(['message' => $e->getMessage() | 'Erreur serveur lors de l\'abandon de la partie.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de l\'abandon de la partie.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -67,7 +67,7 @@ class GameController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error get active session: ' . $e->getMessage());
-            return response()->json(['message' => $e->getMessage() | 'Erreur serveur lors de la récupération de la partie en cours.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la récupération de la partie en cours.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -84,7 +84,7 @@ class GameController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error get completed session: ' . $e->getMessage());
-            return response()->json(['message' => $e->getMessage() | 'Erreur serveur lors de la récupération de la partie complétée.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la récupération de la partie complétée.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -105,7 +105,7 @@ class GameController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error unlock hint: ' . $e->getMessage());
-            return response()->json(['message' => $e->getMessage() | 'Erreur serveur lors du dévérouillage d\'un indice.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors du dévérouillage d\'un indice.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -125,8 +125,8 @@ class GameController extends Controller
             ], Response::HTTP_OK);
 
         } catch (\Exception $e) {
-            Log::error('Error unlock hint: ' . $e->getMessage());
-            return response()->json(['message' => $e->getMessage() | 'Erreur serveur lors de la validation de l\'étape.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
+            Log::error('Error validate step: ' . $e->getMessage());
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la validation de l\'étape.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }

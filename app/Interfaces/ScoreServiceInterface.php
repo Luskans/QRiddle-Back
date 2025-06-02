@@ -12,4 +12,5 @@ interface ScoreServiceInterface
     public function getTopGlobalRanking(string $period, int $userId);
     public function getTopRiddleRanking(Riddle $riddle, int $userId);
     public function calculateFinalScore(GameSession $gameSession);
+    public function updateGlobalScores(int $userId, int $score);
 }
