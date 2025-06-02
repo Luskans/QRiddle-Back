@@ -8,11 +8,8 @@ use App\Models\Riddle;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
-use App\Services\GameServiceInterface;
-use Carbon\Carbon;
 
 class GameController extends Controller
 {
@@ -34,11 +31,6 @@ class GameController extends Controller
                 'data' => $gameSession,
             ], Response::HTTP_OK);
 
-        // } catch (\Illuminate\Validation\ValidationException $e) {
-        //     return response()->json([
-        //         'message' => $e->getMessage()
-        //     ], Response::HTTP_UNPROCESSABLE_ENTITY);
-
         } catch (\Exception $e) {
             Log::error('Error starting new game: ' . $e->getMessage());
             return response()->json(['message' => $e->getMessage() | 'Erreur serveur lors de la création de la nouvelle partie.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -48,9 +40,6 @@ class GameController extends Controller
     public function abandonSession(GameSession $gameSession): JsonResponse
     {
         $user = Auth::user();
-        // if ($user->id !== $gameSession->user_id) {
-        //     return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        // }
 
         try {
             $gameSession = $this->gameplayService->abandonGame($gameSession, $user);
@@ -58,11 +47,6 @@ class GameController extends Controller
             return response()->json([
                 'data' => $gameSession,
             ], Response::HTTP_OK);
-
-        // } catch (\Illuminate\Validation\ValidationException $e) {
-        //     return response()->json([
-        //         'message' => $e->getMessage()
-        //     ], Response::HTTP_UNPROCESSABLE_ENTITY);
 
         } catch (\Exception $e) {
             Log::error('Error abandoning game: ' . $e->getMessage());
@@ -73,9 +57,6 @@ class GameController extends Controller
     public function getActiveSession(GameSession $gameSession): JsonResponse
     {
         $user = Auth::user();
-        // if ($user->id !== $gameSession->user_id) {
-        //     return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        // }
 
         try {
             $activeSession = $this->gameplayService->getCurrentGame($gameSession, $user);
@@ -83,11 +64,6 @@ class GameController extends Controller
             return response()->json([
                 'data' => $activeSession,
             ], Response::HTTP_OK);
-
-        // } catch (\Illuminate\Validation\ValidationException $e) {
-        //     return response()->json([
-        //         'message' => $e->getMessage()
-        //     ], Response::HTTP_UNPROCESSABLE_ENTITY);
 
         } catch (\Exception $e) {
             Log::error('Error get active session: ' . $e->getMessage());
@@ -98,9 +74,6 @@ class GameController extends Controller
     public function getCompletedSession(GameSession $gameSession): JsonResponse
     {
         $user = Auth::user();
-        // if ($user->id !== $gameSession->user_id) {
-        //     return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        // }
 
         try {
             $completedSession = $this->gameplayService->getCompletedGame($gameSession, $user);
@@ -118,9 +91,6 @@ class GameController extends Controller
     public function unlockHint(Request $request, GameSession $gameSession): JsonResponse
     {
         $user = $request->user();
-        // if ($user->id !== $gameSession->user_id) {
-        //     return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        // }
 
         $validated = $request->validate([
             'hint_order_number' => 'required|numeric',
@@ -142,9 +112,6 @@ class GameController extends Controller
     public function validateStep(Request $request, GameSession $gameSession): JsonResponse
     {
         $user = $request->user();
-        // if ($user->id !== $gameSession->user_id) {
-        //     return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        // }
 
         $validated = $request->validate([
             'qr_code' => 'required|string',
@@ -159,7 +126,7 @@ class GameController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error unlock hint: ' . $e->getMessage());
-            return response()->json(['message' => $e->getMessage() | 'Erreur serveur lors du dévérouillage d\'un indice.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() | 'Erreur serveur lors de la validation de l\'étape.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }
