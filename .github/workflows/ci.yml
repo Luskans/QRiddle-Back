@@ -54,7 +54,7 @@ jobs:
       - name: Generate application key
         run: php artisan key:generate
 
-      - name: Run migrations
+      - name: Run migration
         run: php artisan migrate --force
 
       - name: Cache Laravel config
@@ -78,3 +78,15 @@ jobs:
       
       - name: Push Docker image to Docker Hub
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/qriddle-back:latest
+    
+      - name: Deploy to production server
+        if: success() && github.ref == 'refs/heads/main'
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd webapps/qriddle-backend
+            rm docker-compose.yml
+            echo "${{ secrets.DOCKER_COMPOSE_FILE }}" >> docker-compose.yml
