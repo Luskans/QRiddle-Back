@@ -6,15 +6,17 @@ on:
       - main
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
 
     services:
       mysql:
-        image: mysql:5.7
+        image: mysql:8.0
         env:
+          MYSQL_DATABASE: ${{ secrets.DB_DATABASE }}
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: test_ci_cd_pipeline_testing
+          MYSQL_USER: ${{ secrets.DB_USERNAME }}
+          MYSQL_PASSWORD: ${{ secrets.DB_PASSWORD }}
         ports:
           - 3306:3306
         options: >-
@@ -25,19 +27,19 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.2"
+          php-version: '8.2'
           extensions: mbstring, pdo, pdo_mysql
           ini-values: |
             memory_limit=512M
           coverage: none
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Set up environment variables
         run: |
@@ -53,7 +55,26 @@ jobs:
         run: php artisan key:generate
 
       - name: Run migrations
-        run: php artisan migrate --env=testing --force
+        run: php artisan migrate --force
+
+      - name: Cache Laravel config
+        run: php artisan config:cache
+      
+      - name: Cache Laravel routes
+        run: php artisan route:cache
 
       - name: Run tests
-        run: vendor/bin/phpunit --configuration phpunit.xml
+        run: php artisan test
+      
+      - name: Remove .env file
+        if: success()
+        run: rm .env
+      
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Build Docker image
+        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/qriddle-back:latest .
+      
+      - name: Push Docker image to Docker Hub
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/qriddle-back:latest
