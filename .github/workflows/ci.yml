@@ -54,7 +54,7 @@ jobs:
       - name: Generate application key
         run: php artisan key:generate
 
-      - name: Run migrations
+      - name: Run migration
         run: php artisan migrate --force
 
       - name: Cache Laravel config
