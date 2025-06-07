@@ -2,27 +2,34 @@
 
 namespace App\Services;
 
-use App\Interfaces\StepServiceInterface;
 use App\Models\Riddle;
 use App\Models\Step;
+use App\Repositories\Interfaces\StepRepositoryInterface;
+use App\Services\Interfaces\StepServiceInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 class StepService implements StepServiceInterface
 {
-    /**
-     * Create a new step for a riddle.
-     *
-     * @param  \App\Models\Riddle  $riddle
-     * @param  array  $data
-     * @return \App\Models\Step
-     */
-    public function createStep(Riddle $riddle, array $data)
+    protected $stepRepository;
+
+    public function __construct(StepRepositoryInterface $stepRepository)
     {
-        $nextOrderNumber = ($riddle->steps()->max('order_number') ?? 0) + 1;
+        $this->stepRepository = $stepRepository;
+    }
+      
+    public function createStep(Riddle $riddle, array $data, $userId)
+    {
+        if ($userId !== $riddle->creator_id) {
+            throw new \Exception('Utilisateur non autorisé.', Response::HTTP_FORBIDDEN);
+        }
+
+        $nextOrderNumber = $this->stepRepository->getNextOrderNumber($riddle->id);
         $qrCodeValue = (string) Str::uuid();
 
-        return $riddle->steps()->create([
+        return $this->stepRepository->create([
+            'riddle_id' => $riddle->id,
             'latitude' => $data['latitude'],
             'longitude' => $data['longitude'],
             'order_number' => $nextOrderNumber,
@@ -30,50 +37,46 @@ class StepService implements StepServiceInterface
         ]);
     }
 
-    /**
-     * Get the detail of a step with its hints.
-     *
-     * @param  \App\Models\Step  $step
-     * @return \App\Models\Step
-     */
-    public function getStepDetail(Step $step)
+    public function getStepDetail(Step $step, int $userId)
     {
-        return $step->load(['hints' => function($query) {
-            $query->orderBy('order_number', 'asc')
-                ->select('id', 'step_id', 'order_number', 'type', 'content');
-        }]);
+        if (!$step->riddle) {
+            throw new \Exception('Étape non associée à une énigme.', Response::HTTP_NOT_FOUND);
+        }
+
+        if ($userId !== $step->riddle->creator_id) {
+            throw new \Exception('Utilisateur non autorisé.', Response::HTTP_FORBIDDEN);
+        }
+
+        return $this->stepRepository->getStepWithHints($step->id);
     }
 
-    /**
-     * Update a step.
-     *
-     * @param  \App\Models\Step  $step
-     * @param  array  $data
-     * @return \App\Models\Step
-     */
-    public function updateStep(Step $step, array $data)
+    public function updateStep(Step $step, array $data, int $userId)
     {
-        $step->update($data);
-        return $step->fresh();
+        if (!$step->riddle) {
+            throw new \Exception('Étape non associée à une énigme.', Response::HTTP_NOT_FOUND);
+        }
+
+        if ($userId !== $step->riddle->creator_id) {
+            throw new \Exception('Utilisateur non autorisé.', Response::HTTP_FORBIDDEN);
+        }
+
+        return $this->stepRepository->update($step, $data);
     }
 
-    /**
-     * Delete a step and reorder remaining steps.
-     *
-     * @param  \App\Models\Step  $step
-     * @return bool
-     */
-    public function deleteStep(Step $step)
+    public function deleteStep(Step $step, $userId)
     {
-        $orderDeleted = $step->order_number;
-        $riddleId = $step->riddle_id;
+        if (!$step->riddle) {
+            throw new \Exception('Étape non associée à une énigme.', Response::HTTP_NOT_FOUND);
+        }
 
-        return DB::transaction(function() use ($step, $orderDeleted, $riddleId) {
-            $step->delete();
+        if ($userId !== $step->riddle->creator_id) {
+            throw new \Exception('Utilisateur non autorisé.', Response::HTTP_FORBIDDEN);
+        }
 
-            Step::where('riddle_id', $riddleId)
-                ->where('order_number', '>', $orderDeleted)
-                ->decrement('order_number');
+        return DB::transaction(function () use ($step) {
+            $this->stepRepository->delete($step);
+
+            $this->stepRepository->reorderAfterDelete($step->riddle_id, $step->order_number);
 
             return true;
         });

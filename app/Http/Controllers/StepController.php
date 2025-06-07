@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\StepDetailResource;
-use App\Interfaces\StepServiceInterface;
 use App\Models\Riddle;
 use App\Models\Step;
+use App\Services\Interfaces\StepServiceInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
@@ -29,17 +29,13 @@ class StepController extends Controller
      */
     public function store(Request $request, Riddle $riddle): JsonResponse
     {
-        if ($request->user()->id !== $riddle->creator_id) {
-            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        }
-
         $validatedData = $request->validate([
             'latitude' => ['required', 'regex:/^[-]?(([0-8]?[0-9])\.(\d+))|(90(\.0+)?)$/'],
             'longitude' => ['required', 'regex:/^[-]?((((1[0-7][0-9])|([0-9]?[0-9]))\.(\d+))|180(\.0+)?)$/'],
         ]);
 
         try {
-            $step = $this->stepService->createStep($riddle, $validatedData);
+            $step = $this->stepService->createStep($riddle, $validatedData, $request->user()->id);
             
             return response()->json([
                 'data' => $step,
@@ -47,7 +43,7 @@ class StepController extends Controller
             
         } catch (\Exception $e) {
             Log::error('Error creating step: ' . $e->getMessage());
-            return response()->json(['message' => 'Erreur serveur lors de la création de l\'étape.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la création de l\'étape.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -59,17 +55,8 @@ class StepController extends Controller
      */
     public function show(Request $request, Step $step): JsonResponse
     {
-        $riddle = $step->riddle;
-        if (!$riddle) {
-            return response()->json(['message' => 'Étape non associée à une énigme.'], Response::HTTP_NOT_FOUND);
-        }
-
-        if ($request->user()->id !== $riddle->creator_id) {
-            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        }
-
         try {
-            $stepDetail = $this->stepService->getStepDetail($step);
+            $stepDetail = $this->stepService->getStepDetail($step, $request->user()->id);
             
             return response()->json([
                 'data' => new StepDetailResource($stepDetail),
@@ -77,7 +64,7 @@ class StepController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error fetching step detail: ' . $e->getMessage());
-            return response()->json(['message' => 'Erreur serveur lors de la récupération des détails de l\'étape.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la récupération des détails de l\'étape.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -90,22 +77,13 @@ class StepController extends Controller
      */
     public function update(Request $request, Step $step): JsonResponse
     {
-        $riddle = $step->riddle;
-        if (!$riddle) {
-            return response()->json(['message' => 'Étape non associée à une énigme.'], Response::HTTP_NOT_FOUND);
-        }
-
-        if ($request->user()->id !== $riddle->creator_id) {
-            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        }
-
-        $validatedData = $request->validate([
+         $validatedData = $request->validate([
             'latitude' => ['sometimes', 'required', 'regex:/^[-]?(([0-8]?[0-9])\.(\d+))|(90(\.0+)?)$/'],
             'longitude' => ['sometimes', 'required', 'regex:/^[-]?((((1[0-7][0-9])|([0-9]?[0-9]))\.(\d+))|180(\.0+)?)$/'],
         ]);
 
         try {
-            $updatedStep = $this->stepService->updateStep($step, $validatedData);
+            $updatedStep = $this->stepService->updateStep($step, $validatedData, $request->user()->id);
             
             return response()->json([
                 'data' => $updatedStep,
@@ -113,7 +91,7 @@ class StepController extends Controller
 
         } catch (\Exception $e) {
             Log::error("Error updating step {$step->id}: " . $e->getMessage());
-            return response()->json(['message' => 'Erreur serveur lors de la mise à jour de l\'étape.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la mise à jour de l\'étape.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -126,17 +104,8 @@ class StepController extends Controller
      */
     public function destroy(Request $request, Step $step): JsonResponse
     {
-        $riddle = $step->riddle;
-        if (!$riddle) {
-            return response()->json(['message' => 'Étape non associée à une énigme.'], Response::HTTP_NOT_FOUND);
-        }
-
-        if ($request->user()->id !== $riddle->creator_id) {
-            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        }
-
         try {
-            $this->stepService->deleteStep($step);
+            $this->stepService->deleteStep($step, $request->user()->id);
             return response()->json(null, Response::HTTP_NO_CONTENT);
 
         } catch (\Exception $e) {

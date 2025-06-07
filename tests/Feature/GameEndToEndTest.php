@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Interfaces\ScoreServiceInterface;
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Riddle;
@@ -10,6 +9,7 @@ use App\Models\Step;
 use App\Models\SessionStep;
 use App\Models\GameSession;
 use App\Models\Hint;
+use App\Services\Interfaces\ScoreServiceInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 

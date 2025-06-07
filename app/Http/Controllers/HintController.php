@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Interfaces\HintServiceInterface;
 use App\Models\Hint;
 use App\Models\Step;
+use App\Services\Interfaces\HintServiceInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
@@ -39,7 +39,7 @@ class HintController extends Controller
         ]);
 
         try {
-            $hint = $this->hintService->createHint($step, $validatedData);
+            $hint = $this->hintService->createHint($step, $validatedData, $request->user()->id);
             
             return response()->json([
                 'data' => $hint,
@@ -47,7 +47,7 @@ class HintController extends Controller
 
         } catch (\Exception $e) {
             Log::error("Error creating hint: " . $e->getMessage());
-            return response()->json(['message' => 'Erreur serveur lors de la création de l\'indice.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la création de l\'indice.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -70,7 +70,7 @@ class HintController extends Controller
         ]);
 
         try {
-            $updatedHint = $this->hintService->updateHint($hint, $validatedData);
+            $updatedHint = $this->hintService->updateHint($hint, $validatedData, $request->user()->id);
             
             return response()->json([
                 'data' => $updatedHint,
@@ -78,7 +78,7 @@ class HintController extends Controller
 
         } catch (\Exception $e) {
             Log::error("Error updating hint {$hint->id}: " . $e->getMessage());
-            return response()->json(['message' => 'Erreur serveur lors de la mise à jour de l\'indice.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la mise à jour de l\'indice.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -96,7 +96,7 @@ class HintController extends Controller
         }
 
         try {
-            $stepId = $this->hintService->deleteHint($hint);
+            $stepId = $this->hintService->deleteHint($hint, $request->user()->id);
             
             return response()->json([
                 'data' => $stepId,
@@ -104,7 +104,7 @@ class HintController extends Controller
             
         } catch (\Exception $e) {
             Log::error("Error deleting hint {$hint->id}: " . $e->getMessage());
-            return response()->json(['message' => 'Erreur serveur lors de la suppression de l\'indice.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la suppression de l\'indice.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 

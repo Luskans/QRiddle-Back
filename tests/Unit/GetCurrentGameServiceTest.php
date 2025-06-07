@@ -6,14 +6,48 @@ use Tests\TestCase;
 use App\Models\GameSession;
 use App\Models\Riddle;
 use App\Models\User;
+use App\Repositories\Interfaces\GameSessionRepositoryInterface;
+use App\Repositories\Interfaces\ReviewRepositoryInterface;
+use App\Repositories\Interfaces\SessionStepRepositoryInterface;
 use App\Services\GameplayService;
+use App\Services\Interfaces\ScoreServiceInterface;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
 use Tests\Traits\GameTestHelper;
 
 class GetCurrentGameServiceTest extends TestCase
 {
-    use RefreshDatabase, GameTestHelper;
+    use GameTestHelper;
+
+    protected $gameSessionRepository;
+    protected $sessionStepRepository;
+    protected $reviewRepository;
+    protected $scoreService;
+    protected $service;
+
+    public function setUp(): void
+    {
+        parent::setUp();
+
+        $this->gameSessionRepository = Mockery::mock(GameSessionRepositoryInterface::class);
+        $this->sessionStepRepository = Mockery::mock(SessionStepRepositoryInterface::class);
+        $this->reviewRepository = Mockery::mock(ReviewRepositoryInterface::class);
+        $this->scoreService = Mockery::mock(ScoreServiceInterface::class);
+
+        $this->service = new GameplayService(
+            $this->gameSessionRepository,
+            $this->sessionStepRepository,
+            $this->reviewRepository,
+            $this->scoreService
+        );
+    }
+
+    public function tearDown(): void
+    {
+        Mockery::close();
+        parent::tearDown();
+    }
 
 
     /**
@@ -21,15 +55,11 @@ class GetCurrentGameServiceTest extends TestCase
      */
     public function test_getCurrentGame_returns_correct_data()
     {
-        $user = User::factory()->create();
-        $riddle = Riddle::factory()->create();
-
-        // Créer une session de jeu active avec une étape active
+        $user = User::factory()->make();
+        $riddle = Riddle::factory()->make();
         $gameSession = $this->createActiveGameSessionWithStep($user, $riddle);
 
-        $service = new GameplayService();
-
-        $result = $service->getCurrentGame($gameSession, $user);
+        $result = $this->service->getCurrentGame($gameSession, $user);
 
         // On s'attend à recevoir un tableau avec les clés session_step, step, stepsCount et hints
         $this->assertIsArray($result);
@@ -53,23 +83,21 @@ class GetCurrentGameServiceTest extends TestCase
      */
     public function test_getCurrentGame_throws_exception_for_unauthorized_user()
     {
-        $user = User::factory()->create();
-        $otherUser = User::factory()->create();
-        $riddle = Riddle::factory()->create();
+        $user = User::factory()->makeOne();
+        $otherUser = User::factory()->makeOne();
+        $riddle = Riddle::factory()->makeOne();
 
         // Créer une session appartenant à $user
-        $gameSession = GameSession::factory()->create([
+        $gameSession = GameSession::factory()->makeOne([
             'riddle_id' => $riddle->id,
             'user_id'   => $user->id,
             'status'    => 'active'
         ]);
 
-        $service = new GameplayService();
-
         $this->expectExceptionMessage('Utilisateur non autorisé.');
         $this->expectExceptionCode(Response::HTTP_FORBIDDEN);
 
-        $service->getCurrentGame($gameSession, $otherUser);
+        $this->service->getCurrentGame($gameSession, $otherUser);
     }
 
     /**
@@ -77,22 +105,20 @@ class GetCurrentGameServiceTest extends TestCase
      */
     public function test_getCurrentGame_throws_exception_if_session_not_active()
     {
-        $user = User::factory()->create();
-        $riddle = Riddle::factory()->create();
+        $user = User::factory()->makeOne();
+        $riddle = Riddle::factory()->makeOne();
 
         // Créer une session de jeu non active (exemple : terminée)
-        $gameSession = GameSession::factory()->create([
+        $gameSession = GameSession::factory()->makeOne([
             'riddle_id' => $riddle->id,
             'user_id'   => $user->id,
             'status'    => 'completed'
         ]);
 
-        $service = new GameplayService();
-
         $this->expectExceptionMessage('La partie est déjà terminée ou abandonnée.');
         $this->expectExceptionCode(Response::HTTP_UNPROCESSABLE_ENTITY);
 
-        $service->getCurrentGame($gameSession, $user);
+        $this->service->getCurrentGame($gameSession, $user);
     }
 
     /**
@@ -100,8 +126,8 @@ class GetCurrentGameServiceTest extends TestCase
      */
     public function test_getCurrentGame_throws_exception_if_no_active_step_found()
     {
-        $user = User::factory()->create();
-        $riddle = Riddle::factory()->create();
+        $user = User::factory()->makeOne();
+        $riddle = Riddle::factory()->makeOne();
 
         // Créer une session active sans définir de latestActiveSessionStep
         $gameSession = GameSession::factory()->create([
@@ -110,12 +136,9 @@ class GetCurrentGameServiceTest extends TestCase
             'status'    => 'active'
         ]);
 
-        // On ne met pas de relation latestActiveSessionStep, ce qui simule l'absence d'étape active
-        $service = new GameplayService();
-
         $this->expectExceptionMessage('La partie est déjà terminée ou abandonnée.');
         $this->expectExceptionCode(Response::HTTP_UNPROCESSABLE_ENTITY);
 
-        $service->getCurrentGame($gameSession, $user);
+        $this->service->getCurrentGame($gameSession, $user);
     }
 }

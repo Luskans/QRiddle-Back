@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\RiddleDetailResource;
-use App\Interfaces\RiddleServiceInterface;
 use App\Models\Riddle;
+use App\Services\Interfaces\RiddleServiceInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
@@ -100,10 +100,6 @@ class RiddleController extends Controller
      */
     public function update(Request $request, Riddle $riddle): JsonResponse
     {
-        if ($request->user()->id !== $riddle->creator_id) {
-            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        }
-
         $validatedData = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'description' => 'sometimes|required|string|max:1000',
@@ -114,7 +110,7 @@ class RiddleController extends Controller
         ]);
 
         try {
-            $updatedRiddle = $this->riddleService->updateRiddle($riddle, $validatedData);
+            $updatedRiddle = $this->riddleService->updateRiddle($riddle, $validatedData, $request->user()->id);
             
             return response()->json([
                 'data' => $updatedRiddle,
@@ -122,7 +118,7 @@ class RiddleController extends Controller
 
         } catch (\Exception $e) {
             Log::error("Error updating riddle {$riddle->id}: " . $e->getMessage());
-            return response()->json(['message' => $e->getMessage() ?:  'Erreur serveur lors de la mise à jour de l\'énigme.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la mise à jour de l\'énigme.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -135,17 +131,13 @@ class RiddleController extends Controller
      */
     public function destroy(Request $request, Riddle $riddle): JsonResponse
     {
-        if ($request->user()->id !== $riddle->creator_id) {
-            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        }
-
         try {
-            $this->riddleService->deleteRiddle($riddle);
+            $this->riddleService->deleteRiddle($riddle, $request->user()->id);
             return response()->json(null, Response::HTTP_NO_CONTENT);
 
         } catch (\Exception $e) {
             Log::error("Error deleting riddle {$riddle->id}: " . $e->getMessage());
-            return response()->json(['message' => 'Erreur serveur : la suppression de l\'énigme a échouée.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la suppression de l\'énigme.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 

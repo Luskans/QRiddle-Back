@@ -2,26 +2,42 @@
 
 namespace App\Services;
 
-use App\Interfaces\GameplayServiceInterface;
-use App\Interfaces\ScoreServiceInterface;
 use App\Models\Riddle;
 use App\Models\GameSession;
-use App\Models\Review;
-use App\Models\SessionStep;
 use App\Models\User;
+use App\Repositories\Interfaces\GameSessionRepositoryInterface;
+use App\Repositories\Interfaces\ReviewRepositoryInterface;
+use App\Repositories\Interfaces\SessionStepRepositoryInterface;
+use App\Services\Interfaces\GameplayServiceInterface;
+use App\Services\Interfaces\ScoreServiceInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 class GameplayService implements GameplayServiceInterface
 {
+    protected $gameSessionRepository;
+    protected $sessionStepRepository;
+    protected $reviewRepository;
+    protected $scoreService;
+
+    public function __construct(
+        GameSessionRepositoryInterface $gameSessionRepository,
+        SessionStepRepositoryInterface $sessionStepRepository,
+        ReviewRepositoryInterface $reviewRepository,
+        ScoreServiceInterface $scoreService,
+    ) {
+        $this->gameSessionRepository = $gameSessionRepository;
+        $this->sessionStepRepository = $sessionStepRepository;
+        $this->reviewRepository = $reviewRepository;
+        $this->scoreService = $scoreService;
+    }
+
     public function startGame(Riddle $riddle, User $user, Request $request): GameSession
     {
-        $existingSession = GameSession::where('riddle_id', $riddle->id)
-            ->where('user_id', $user->id)
-            ->first();
+        $existingSession = $this->gameSessionRepository->getActiveSessionForRiddleAndUser($riddle->id, $user->id);
 
-        if ($existingSession && $existingSession->status === 'active') {
+        if ($existingSession) {
             return $existingSession;
         }
 
@@ -37,20 +53,13 @@ class GameplayService implements GameplayServiceInterface
 
         return DB::transaction(function () use ($riddle, $user, $existingSession) {
             if ($existingSession) {
-                $existingSession->sessionSteps()->delete();
+                $this->sessionStepRepository->deleteStepsForSession($existingSession);
                 $existingSession->delete();
             }
 
-            GameSession::where('user_id', $user->id)
-                ->where('status', 'active')
-                ->each(function ($session) {
-                    $session->update(['status' => 'abandoned']);
-                    $session->sessionSteps()
-                        ->where('status', 'active')
-                        ->update(['status' => 'abandoned', 'end_time' => now()]);
-                });
+            $this->gameSessionRepository->abandonAllActiveSessionsForUser($user->id);
 
-            $gameSession = GameSession::create([
+            $gameSession = $this->gameSessionRepository->createSession([
                 'riddle_id' => $riddle->id,
                 'user_id' => $user->id,
                 'status' => 'active',
@@ -63,7 +72,7 @@ class GameplayService implements GameplayServiceInterface
                 throw new \Exception('Cette énigme ne contient aucune étape.', Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
-            SessionStep::create([
+            $this->sessionStepRepository->create([
                 'game_session_id' => $gameSession->id,
                 'step_id' => $firstStep->id,
                 'status' => 'active',
@@ -86,11 +95,11 @@ class GameplayService implements GameplayServiceInterface
         }
 
         return DB::transaction(function () use ($session) {
-            $session->update(['status' => 'abandoned']);
+            $this->gameSessionRepository->updateSessionStatus($session, 'abandoned');
 
             $step = $session->latestActiveSessionStep;
             if ($step) {
-                $step->update(['status' => 'abandoned', 'end_time' => now()]);
+                $this->sessionStepRepository->abandonStep($step);
             }
 
             return $session;
@@ -144,9 +153,7 @@ class GameplayService implements GameplayServiceInterface
             throw new \Exception('L\'énigme n\'est pas encore réussie.', Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
-        $hasReviewed = Review::where('user_id', $user->id)
-            ->where('riddle_id', $session->riddle_id)
-            ->exists();
+        $hasReviewed = $this->reviewRepository->userHasReviewedRiddle($session->riddle_id, $user->id);
 
         return [
             'id' => $session->id,
@@ -179,7 +186,7 @@ class GameplayService implements GameplayServiceInterface
             throw new \Exception('Veuillez débloquer l\'indice précédent.', Response::HTTP_FORBIDDEN);
         }
 
-        $step->increment('extra_hints');
+        $this->sessionStepRepository->incrementExtraHints($step);
         return $session->fresh();
     }
 
@@ -209,7 +216,7 @@ class GameplayService implements GameplayServiceInterface
                 ->first();
 
             if ($nextStep) {
-                SessionStep::create([
+                $this->sessionStepRepository->create([
                     'game_session_id' => $session->id,
                     'step_id' => $nextStep->id,
                     'status' => 'active',
@@ -218,21 +225,10 @@ class GameplayService implements GameplayServiceInterface
                 ]);
 
             } else {
-                // $session->update(['status' => 'completed']);
-
-                 // C'est la dernière étape, l'énigme est complétée
-                    // Calculer le score final
-                $scoreService = app(ScoreServiceInterface::class);
-                $finalScore = $scoreService->calculateFinalScore($session);
-                
-                // Mettre à jour la session avec le score final
-                $session->update([
-                    'status' => 'completed',
-                    'score' => $finalScore
-                ]);
-                
-                // Mettre à jour les scores globaux
-                $scoreService->updateGlobalScores($session->user_id, $finalScore);
+                $finalScore = $this->scoreService->calculateFinalScore($session);
+                $this->gameSessionRepository->updateSessionStatus($session, 'completed');
+                $session->update(['score' => $finalScore]);
+                $this->scoreService->updateGlobalScores($session->user_id, $finalScore);
             }
 
             return [

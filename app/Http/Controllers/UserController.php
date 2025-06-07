@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Interfaces\GameSessionServiceInterface;
-use App\Interfaces\RiddleServiceInterface;
+use App\Services\Interfaces\GameSessionServiceInterface;
+use App\Services\Interfaces\RiddleServiceInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;

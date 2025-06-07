@@ -1,13 +1,13 @@
 <?php
 namespace Tests\Feature;
 
-use App\Interfaces\ScoreServiceInterface;
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\GameSession;
 use App\Models\Riddle;
 use App\Models\SessionStep;
 use App\Models\Step;
+use App\Services\Interfaces\ScoreServiceInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
 use Mockery;

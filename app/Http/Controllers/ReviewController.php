@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Interfaces\ReviewServiceInterface;
 use App\Models\Review;
 use App\Models\Riddle;
+use App\Services\Interfaces\ReviewServiceInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
@@ -106,10 +106,6 @@ class ReviewController extends Controller
      */
     public function update(Request $request, Review $review): JsonResponse
     {
-        if ($request->user()->id !== $review->user_id) {
-            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        }
-
         $validatedData = $request->validate([
             'content' => 'sometimes|required|string|max:1000',
             'rating' => 'sometimes|required|integer|min:1|max:5',
@@ -117,7 +113,7 @@ class ReviewController extends Controller
         ]);
 
         try {
-            $updatedReview = $this->reviewService->updateReview($review, $validatedData);
+            $updatedReview = $this->reviewService->updateReview($review, $validatedData, $request->user()->id);
             
             return response()->json([
                 'data' => $updatedReview,
@@ -125,7 +121,7 @@ class ReviewController extends Controller
 
         } catch (\Exception $e) {
             Log::error("Error updating review {$review->id}: " . $e->getMessage());
-            return response()->json(['message' => 'Erreur serveur lors de la mise à jour de l\'avis.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' => $e->getMessage() ?: 'Erreur serveur lors de la mise à jour de l\'avis.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -138,17 +134,13 @@ class ReviewController extends Controller
      */
     public function destroy(Request $request, Review $review): JsonResponse
     {
-        if ($request->user()->id !== $review->user_id) {
-            return response()->json(['message' => 'Utilisateur non autorisé.'], Response::HTTP_FORBIDDEN);
-        }
-
         try {
-            $this->reviewService->deleteReview($review);
+            $this->reviewService->deleteReview($review, $request->user()->id);
             return response()->json(null, Response::HTTP_NO_CONTENT);
 
         } catch (\Exception $e) {
             Log::error("Error deleting review {$review->id}: " . $e->getMessage());
-            return response()->json(['message' => 'Erreur serveur lors de la suppression de l\'avis.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json(['message' =>  $e->getMessage() ?: 'Erreur serveur lors de la suppression de l\'avis.'], $e->getCode() ?: Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }

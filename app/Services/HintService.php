@@ -2,76 +2,54 @@
 
 namespace App\Services;
 
-use App\Interfaces\HintServiceInterface;
 use App\Models\Hint;
 use App\Models\Step;
+use App\Repositories\Interfaces\HintRepositoryInterface;
+use App\Services\Interfaces\HintServiceInterface;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Intervention\Image\Facades\Image;
+use Symfony\Component\HttpFoundation\Response;
+
 
 class HintService implements HintServiceInterface
 {
-    /**
-     * Create a new hint for a step.
-     *
-     * @param  \App\Models\Step  $step
-     * @param  array  $data
-     * @return \App\Models\Hint
-     */
-    public function createHint(Step $step, array $data)
-    {
-        $nextOrderNumber = ($step->hints()->max('order_number') ?? 0) + 1;
+    protected $hintRepository;
 
-        return $step->hints()->create([
-            'type' => $data['type'],
-            'content' => $data['content'],
-            'order_number' => $nextOrderNumber,
-        ]);
+    public function __construct(HintRepositoryInterface $hintRepository)
+    {
+        $this->hintRepository = $hintRepository;
+    }
+    
+    public function createHint(Step $step, array $data, int $userId)
+    {
+        if ($userId !== $step->riddle->creator_id) {
+            throw new \Exception('Utilisateur non autorisé.', Response::HTTP_FORBIDDEN);
+        }
+
+        $data['order_number'] = $this->hintRepository->getNextOrderNumber($step);
+        return $this->hintRepository->createForStep($step, $data);
     }
 
-    /**
-     * Update a hint.
-     *
-     * @param  \App\Models\Hint  $hint
-     * @param  array  $data
-     * @return \App\Models\Hint
-     */
-    public function updateHint(Hint $hint, array $data)
+    public function updateHint(Hint $hint, array $data, int $userId)
     {
-        $hint->update($data);
-        return $hint->fresh();
+        if ($userId !== $hint->step->riddle->creator_id) {
+            throw new \Exception('Utilisateur non autorisé.', Response::HTTP_FORBIDDEN);
+        }
+
+        return $this->hintRepository->update($hint, $data);
     }
 
-    /**
-     * Delete a hint and reorder remaining hints.
-     *
-     * @param  \App\Models\Hint  $hint
-     * @return int The step ID
-     */
-    public function deleteHint(Hint $hint)
+    public function deleteHint(Hint $hint, int $userId)
     {
-        $orderDeleted = $hint->order_number;
-        $stepId = $hint->step_id;
+        if ($userId !== $hint->step->riddle->creator_id) {
+            throw new \Exception('Utilisateur non autorisé.', Response::HTTP_FORBIDDEN);
+        }
 
-        return DB::transaction(function() use ($hint, $orderDeleted, $stepId) {
-            $hint->delete();
-
-            Hint::where('step_id', $stepId)
-                ->where('order_number', '>', $orderDeleted)
-                ->decrement('order_number');
-
-            return $stepId;
-        });
+        return $this->hintRepository->deleteAndReorder($hint);
     }
 
-    /**
-     * Upload an image for a hint.
-     *
-     * @param  \App\Models\Hint  $hint
-     * @param  \Illuminate\Http\UploadedFile  $image
-     * @return string The image URL
-     */
     // public function uploadHintImage(Hint $hint, UploadedFile $image)
     // {
     //     // Générer un nom de fichier unique
