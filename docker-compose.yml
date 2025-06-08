@@ -25,7 +25,7 @@ services:
       - .:/var/www/html
     command: >
       sh -c "
-      ./wait-for-db.sh &&
+      wait-for-db.sh &&
       php artisan migrate --force &&
       php artisan db:seed --force &&
       apache2-foreground
