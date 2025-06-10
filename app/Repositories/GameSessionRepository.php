@@ -53,11 +53,10 @@ class GameSessionRepository implements GameSessionRepositoryInterface
             ->first();
     }
 
-    public function getActiveSessionForRiddleAndUser(int $riddleId, int $userId): ?GameSession
+    public function getSessionForRiddleAndUser(int $riddleId, int $userId): ?GameSession
     {
         return GameSession::where('riddle_id', $riddleId)
             ->where('user_id', $userId)
-            ->where('status', 'active')
             ->first();
     }
 

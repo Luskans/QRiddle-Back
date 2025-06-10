@@ -23,38 +23,36 @@ class GameEndToEndTest extends TestCase
         /** @var User $user */
         $this->actingAs($user);
 
-        // Créer une énigme avec deux étapes et des indices
         $riddle = Riddle::factory()->create(['is_private' => false]);
-
         $step1 = Step::factory()->create(['riddle_id' => $riddle->id, 'order_number' => 1, 'qr_code' => 'qr-step-1']);
         $step2 = Step::factory()->create(['riddle_id' => $riddle->id, 'order_number' => 2, 'qr_code' => 'qr-step-2']);
 
         Hint::factory()->count(2)->create(['step_id' => $step2->id]);
 
-        // 1. Démarrer la session
+        // 1. Start a game
         $response = $this->postJson(route('riddles.play', ['riddle' => $riddle->id]));
         $response->assertStatus(200);
         $gameSessionId = $response->json('data.id');
 
-        // 2. Récupérer la session active
+        // 2. Get the current session
         $response = $this->getJson(route('game.active-session', ['gameSession' => $gameSessionId]));
         $response->assertStatus(200);
         $this->assertEquals($step1->id, $response->json('data.step.id'));
 
-        // 3. Valider la 1ère étape avec bon QR code
+        // 3. Validate the first step with a valid QR code
         $response = $this->postJson(route('game.validate-step', ['gameSession' => $gameSessionId]), [
             'qr_code' => 'qr-step-1',
         ]);
         $response->assertStatus(200);
         $this->assertFalse($response->json('data.game_completed'));
 
-        // 4. Valider la 2ème étape avec un QR code invalide
+        // 4. Validate the second step with a invalid QR code
         $response = $this->postJson(route('game.validate-step', ['gameSession' => $gameSessionId]), [
             'qr_code' => 'wrong-code',
         ]);
-        $response->assertStatus(422); // erreur attendue
+        $response->assertStatus(422);
 
-        // 5. Déverrouiller un indice
+        // 5. Unlock a hint
         $response = $this->postJson(route('game.unlock-hint', ['gameSession' => $gameSessionId]), [
             'hint_order_number' => 2,
         ]);
@@ -65,8 +63,7 @@ class GameEndToEndTest extends TestCase
             'extra_hints' => 1,
         ]);
 
-        // 6. Valider la 2ème étape avec le bon QR code
-        // Mock du ScoreService
+        // 6. Validate the second step with a valid QR code
         $scoreServiceMock = Mockery::mock(ScoreServiceInterface::class);
         $scoreServiceMock->shouldReceive('calculateFinalScore')->once()->andReturn(150);
         $scoreServiceMock->shouldReceive('updateGlobalScores')->once();
@@ -78,7 +75,7 @@ class GameEndToEndTest extends TestCase
         $response->assertStatus(200);
         $this->assertTrue($response->json('data.game_completed'));
 
-        // 7. Récupérer la session complétée
+        // 7. Get the completed session
         $response = $this->getJson(route('game.completed-session', ['gameSession' => $gameSessionId]));
         $response->assertStatus(200);
         $response->assertJsonFragment([

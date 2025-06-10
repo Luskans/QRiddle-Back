@@ -1,37 +1,37 @@
-# Utiliser l'image officielle PHP avec Apache, version compatible avec votre application
+# docker/production/Dockerfile
 FROM php:8.2-apache
 
-# Installer les extensions requises
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     iputils-ping \
     libfreetype6-dev \
-    libzip-dev \
+    libzip-dev zip unzip curl git \
+    libpng-dev libonig-dev libxml2-dev \
     netcat-openbsd \
-    && docker-php-ext-install -j$(nproc) pdo pdo_mysql zip \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && docker-php-ext-install pdo pdo_mysql zip \
+    && a2enmod rewrite
 
-# Activer le mod_rewrite d'Apache pour les jolies URLs de Laravel
-RUN a2enmod rewrite
-
-# Définir le répertoire de travail
+# Set working directory
 WORKDIR /var/www/html
 
-# Copier les fichiers de l'application dans l'image
-COPY . /var/www/html/
+# Copy app files
+COPY . .
 
-# Installer les dépendances Composer
-COPY composer.lock composer.json /var/www/html/
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
-    && composer install --no-scripts --no-autoloader --no-dev \
+# Install Composer and dependencies
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/bin --filename=composer \
+    && composer install --optimize-autoloader --no-dev \
     && composer dump-autoload --optimize \
     && php artisan optimize
 
-# Changer la propriété du dossier à www-data
+# Permissions
 RUN chown -R www-data:www-data /var/www/html
 
-# Exposer le port 80
+# Expose port
 EXPOSE 80
 
 # Configuration Apache
 RUN echo 'ServerName localhost' >> /etc/apache2/apache2.conf \
     && sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
+
+# Lance Apache
+CMD ["apache2-foreground"]

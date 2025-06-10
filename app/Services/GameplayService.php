@@ -35,9 +35,9 @@ class GameplayService implements GameplayServiceInterface
 
     public function startGame(Riddle $riddle, User $user, Request $request): GameSession
     {
-        $existingSession = $this->gameSessionRepository->getActiveSessionForRiddleAndUser($riddle->id, $user->id);
+        $existingSession = $this->gameSessionRepository->getSessionForRiddleAndUser($riddle->id, $user->id);
 
-        if ($existingSession) {
+        if ($existingSession && $existingSession->status === 'active') {
             return $existingSession;
         }
 
